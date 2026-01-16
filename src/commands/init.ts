@@ -74,6 +74,15 @@ export const initCommand = new Command("init")
             const configContent = `projects:
 ${projectsExample}
 ${projectLines}${projectLines ? "\n" : ""}
+# defaultTarget: .env.local
+
+# presets:
+#   production:
+#     target: .env.production
+#     protected: true
+#   staging:
+#     target: .env.staging
+
 variables:
   # Add sensitive variables here
   # SECRET_KEY:

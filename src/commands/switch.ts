@@ -25,6 +25,19 @@ export async function performSwitch(preset: string, rootDir: string = process.cw
             process.exit(1);
     }
 
+    const presetConfig = config.presets[preset];
+    if (presetConfig?.protected) {
+        const confirmed = await p.confirm({
+            message: `⚠️  '${preset}' is a protected preset. Are you sure you want to switch?`,
+            initialValue: false
+        });
+        
+        if (p.isCancel(confirmed) || !confirmed) {
+            console.log("Switch cancelled.");
+            return;
+        }
+    }
+
     const statePath = join(rootDir, ".quickenv.state");
     const envPath = await resolveEnvQuickPath(statePath);
     const envFile = Bun.file(envPath);
@@ -43,13 +56,18 @@ export async function performSwitch(preset: string, rootDir: string = process.cw
     
     for (const proj of projects) {
         let path: string;
-        let target = config.defaultTarget || ".env"; // Use defaultTarget if provided, fallback to .env
+        let target = config.defaultTarget || ".env"; // Default fallback
         
         if (typeof proj === "string") {
             path = proj;
         } else {
             path = proj.path;
             if (proj.target) target = proj.target;
+        }
+
+        // Preset target always wins if defined
+        if (presetConfig?.target) {
+            target = presetConfig.target;
         }
         
         const projectKey = path;
@@ -64,7 +82,11 @@ export async function performSwitch(preset: string, rootDir: string = process.cw
         console.log(`Updated ${targetPath}`);
     }
     
-    await saveState({ ...await loadState(statePath), activePreset: preset }, statePath);
+    await saveState({ 
+        ...await loadState(statePath), 
+        activePreset: preset,
+        isProtected: !!presetConfig?.protected
+    }, statePath);
     console.log(`Switched to preset '${preset}'.`);
 }
 
@@ -90,9 +112,13 @@ export const switchCommand = new Command("switch")
                 process.exit(1);
             }
             
+            const config = await loadConfig();
             const selected = await p.select({
                 message: "Select a preset to switch to:",
-                options: presets.map(p => ({ value: p, label: p }))
+                options: presets.map(p => ({ 
+                    value: p, 
+                    label: config?.presets[p]?.protected ? `🔒 ${p}` : p 
+                }))
             });
             
             if (p.isCancel(selected)) {

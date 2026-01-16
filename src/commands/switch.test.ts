@@ -80,4 +80,44 @@ NESTED_VAR=true
         expect(await webEnv.exists()).toBe(true);
         expect(await webEnv.text()).toContain("NESTED_VAR=true");
     });
+
+    it("should allow preset to override target filename", async () => {
+        const projectPath = join(tmpDir, "apps/prod-app");
+        await mkdir(projectPath, { recursive: true });
+        
+        const configPath = join(tmpDir, "quickenv.yaml");
+        const configContent = `
+projects:
+  - path: apps/prod-app
+    target: .env.local
+presets:
+  production:
+    target: .env.production
+`;
+        await writeFile(configPath, configContent);
+
+        const envQuickPath = join(tmpDir, ".env.quick");
+        const envQuickContent = `
+[production]
+DB_URL=postgres://prod
+`;
+        await writeFile(envQuickPath, envQuickContent);
+
+        await performSwitch("production", tmpDir);
+
+        // Should use .env.production instead of .env.local
+        const prodEnv = Bun.file(join(projectPath, ".env.production"));
+        const localEnv = Bun.file(join(projectPath, ".env.local"));
+        
+        expect(await prodEnv.exists()).toBe(true);
+        expect(await localEnv.exists()).toBe(false);
+        expect(await prodEnv.text()).toContain("DB_URL=postgres://prod");
+
+        // Verify state
+        const stateFile = Bun.file(join(tmpDir, ".quickenv.state"));
+        expect(await stateFile.exists()).toBe(true);
+        const state = await stateFile.json();
+        expect(state.activePreset).toBe("production");
+        expect(state.isProtected).toBe(false); // In this test, protected was not true in config
+    });
 });

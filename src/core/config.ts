@@ -11,6 +11,10 @@ export const ConfigSchema = z.object({
     })
   ])).nullish().transform(v => v ?? []),
   defaultTarget: z.string().optional(),
+  presets: z.record(z.string(), z.object({
+    target: z.string().optional(),
+    protected: z.boolean().optional()
+  })).nullish().transform(v => v ?? {}),
   variables: z.record(z.string(), z.object({
     sensitive: z.boolean().optional(),
     revealPattern: z.string().optional(),
@@ -23,7 +27,8 @@ export type Config = z.infer<typeof ConfigSchema>;
 
 export const StateSchema = z.object({
   activePreset: z.string().optional(),
-  envPath: z.string().optional()
+  envPath: z.string().optional(),
+  isProtected: z.boolean().optional()
 });
 
 export type State = z.infer<typeof StateSchema>;
