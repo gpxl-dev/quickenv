@@ -102,4 +102,39 @@ VAR=
       const result = resolveEnv(sections, "local", "web");
       expect(result).toEqual({});
   });
+
+  it("resolves all project:preset variables when project is omitted", () => {
+    const input = `
+[web:local]
+VAR1=web
+[api:local]
+VAR2=api
+`;
+    const sections = parseEnvQuick(input);
+    const result = resolveEnv(sections, "local");
+    expect(result).toEqual({ VAR1: "web", VAR2: "api" });
+  });
+
+  it("resolves project variables (without preset)", () => {
+    const input = `
+VAR_GLOBAL=global
+[web]
+VAR_PROJECT=project-only
+`;
+    const sections = parseEnvQuick(input);
+    const result = resolveEnv(sections, "local", "web");
+    expect(result).toEqual({ VAR_GLOBAL: "global", VAR_PROJECT: "project-only" });
+  });
+
+  it("prioritizes project variables over preset variables", () => {
+    const input = `
+[local]
+VAR=preset
+[web]
+VAR=project
+`;
+    const sections = parseEnvQuick(input);
+    const result = resolveEnv(sections, "local", "web");
+    expect(result).toEqual({ VAR: "project" });
+  });
 });

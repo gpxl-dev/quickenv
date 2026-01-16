@@ -31,11 +31,23 @@ export function resolveEnv(
     }
   }
 
-  // Layer 3: Project Specific
+  // Layer 3: Project Specific (All presets)
   if (project) {
-    const projectTag = `${project}:${preset}`;
     for (const section of sections) {
-      if (section.tags.includes(projectTag)) {
+      if (section.tags.includes(project)) {
+        applyVariables(section.variables);
+      }
+    }
+  }
+
+  // Layer 4: Project Specific (Specific preset)
+  for (const section of sections) {
+    for (const tag of section.tags) {
+      if (project) {
+        if (tag === `${project}:${preset}`) {
+          applyVariables(section.variables);
+        }
+      } else if (tag.endsWith(`:${preset}`)) {
         applyVariables(section.variables);
       }
     }

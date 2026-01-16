@@ -6,6 +6,8 @@ import { switchCommand } from "./src/commands/switch";
 import { initCommand } from "./src/commands/init";
 import { setCommand } from "./src/commands/set";
 import { resetCommand } from "./src/commands/reset";
+import { scanCommand } from "./src/commands/scan";
+import { helpCommand } from "./src/commands/help";
 
 const program = new Command();
 
@@ -15,9 +17,11 @@ program
   .version(pkg.version);
 
 program.addCommand(initCommand);
+program.addCommand(scanCommand);
 program.addCommand(listCommand);
 program.addCommand(switchCommand);
 program.addCommand(setCommand);
 program.addCommand(resetCommand);
+program.addCommand(helpCommand);
 
 program.parse();

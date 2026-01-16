@@ -17,14 +17,16 @@ function getPresets(sections: QuickEnvSection[]): string[] {
     return Array.from(presets).sort();
 }
 
-export async function performSwitch(preset: string) {
-    const config = await loadConfig();
+export async function performSwitch(preset: string, rootDir: string = process.cwd()) {
+    const configPath = join(rootDir, "quickenv.yaml");
+    const config = await loadConfig(configPath);
     if (!config) {
             console.error("quickenv.yaml not found. Run 'quickenv init'.");
             process.exit(1);
     }
 
-    const envFile = Bun.file(".env.quick");
+    const envPath = join(rootDir, ".env.quick");
+    const envFile = Bun.file(envPath);
     if (!(await envFile.exists())) {
         console.error(".env.quick not found.");
         process.exit(1);
@@ -40,7 +42,7 @@ export async function performSwitch(preset: string) {
     
     for (const proj of projects) {
         let path: string;
-        let target = ".env"; // Default target
+        let target = config.defaultTarget || ".env"; // Use defaultTarget if provided, fallback to .env
         
         if (typeof proj === "string") {
             path = proj;
@@ -49,19 +51,20 @@ export async function performSwitch(preset: string) {
             if (proj.target) target = proj.target;
         }
         
-        const projectKey = path.split('/').pop() || path;
+        const projectKey = path;
         const vars = resolveEnv(sections, preset, projectKey);
         
         const lines = Object.entries(vars).map(([k, v]) => `${k}=${v}`);
         const fileContent = lines.join("\n") + "\n";
         
-        const targetPath = join(path, target);
+        const targetPath = join(rootDir, path, target);
         
         await Bun.write(targetPath, fileContent);
         console.log(`Updated ${targetPath}`);
     }
     
-    await saveState({ activePreset: preset });
+    const statePath = join(rootDir, ".quickenv.state");
+    await saveState({ activePreset: preset }, statePath);
     console.log(`Switched to preset '${preset}'.`);
 }
 

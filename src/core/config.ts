@@ -10,12 +10,13 @@ export const ConfigSchema = z.object({
       path: z.string(),
       target: z.string().optional() // e.g. .env, .env.local
     })
-  ])),
+  ])).nullish().transform(v => v ?? []),
+  defaultTarget: z.string().optional(),
   variables: z.record(z.string(), z.object({
     sensitive: z.boolean().optional(),
     revealPattern: z.string().optional(),
     maskGroups: z.array(z.number()).optional()
-  })).optional(),
+  })).nullish().transform(v => v ?? {}),
   tui: z.any().optional()
 });
 
@@ -33,8 +34,20 @@ export async function loadConfig(path = "quickenv.yaml"): Promise<Config | null>
     return null;
   }
   const text = await file.text();
-  const raw = YAML.parse(text);
-  return ConfigSchema.parse(raw);
+  try {
+    const raw = YAML.parse(text);
+    return ConfigSchema.parse(raw);
+  } catch (e) {
+    if (e instanceof z.ZodError) {
+      console.error(`\nInvalid configuration in ${path}:`);
+      e.issues.forEach(issue => {
+        const path = issue.path.join(".");
+        console.error(`  - ${path ? path + ": " : ""}${issue.message}`);
+      });
+      process.exit(1);
+    }
+    throw e;
+  }
 }
 
 export async function loadState(path = ".quickenv.state"): Promise<State> {

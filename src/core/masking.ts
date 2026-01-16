@@ -6,12 +6,43 @@ export function maskValue(key: string, value: string, config: Config | null): st
   }
   
   const rules = config.variables[key];
-  if (!rules?.sensitive) {
+  if (!rules?.sensitive && !rules?.revealPattern) {
     return value;
   }
 
-  // TODO: Implement regex based masking
-  // if (rules.revealPattern && rules.maskGroups) { ... }
+  // Regex based masking
+  if (rules.revealPattern) {
+    try {
+      const regex = new RegExp(rules.revealPattern);
+      const match = value.match(regex);
+      
+      if (match) {
+        const groupsToMask = rules.maskGroups || [1]; // Default to first capture group if not specified
+        let result = value;
+        
+        // We sort groups in descending order to avoid offset issues during replacement
+        const sortedGroups = [...groupsToMask].sort((a, b) => b - a);
+        
+        for (const groupIndex of sortedGroups) {
+          const groupValue = match[groupIndex];
+          if (groupValue !== undefined) {
+            // Find the index of this specific capture group in the original string
+            // Note: This is a simple implementation that finds the first occurrence.
+            // For complex patterns with repeated identical groups, a more robust offset-based approach would be needed.
+            const start = value.indexOf(groupValue);
+            if (start !== -1) {
+               result = result.substring(0, start) + "*".repeat(groupValue.length) + result.substring(start + groupValue.length);
+            }
+          }
+        }
+        return result;
+      }
+    } catch (e) {
+      // If regex is invalid, fall back to default masking
+    }
+  }
+
+  if (!rules?.sensitive) return value;
 
   const len = value.length;
   if (len > 16) {

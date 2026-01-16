@@ -59,9 +59,18 @@ export const initCommand = new Command("init")
         
         // 3. Generate quickenv.yaml
         if (!(await Bun.file("quickenv.yaml").exists())) {
-            const configContent = `projects:
-${projectList.map(p => `  - ${p}`).join("\n")}
+            const projectsExample = `  # Add project paths here (e.g. apps/web)
+  # - apps/web
+  # - path: apps/api
+  #   target: .env.local`;
+            
+            const projectLines = projectList.length > 0 
+                ? projectList.map(p => `  - ${p}`).join("\n")
+                : "";
 
+            const configContent = `projects:
+${projectsExample}
+${projectLines}${projectLines ? "\n" : ""}
 variables:
   # Add sensitive variables here
   # SECRET_KEY:
@@ -76,11 +85,18 @@ variables:
         // 4. Generate .env.quick
         if (!(await Bun.file(".env.quick").exists())) {
             let initialEnvContent = `# Shared variables
-# [local, production]
 # NODE_ENV=development
+
+# Global variables (applied everywhere)
+# AUTH_URL=http://localhost:3337
 
 [local]
 # Add local overrides here
+DEBUG=true
+
+# [apps/web]
+# # Project-specific constant (overrides presets)
+# APP_TITLE=My Web App
 `;
             // Try to pre-fill from an example if available
             // Just picking the first found example for demo purposes

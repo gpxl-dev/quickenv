@@ -68,7 +68,7 @@ export const setCommand = new Command("set")
                 if (proj.target) target = proj.target;
             }
             
-            const projectKey = path.split('/').pop() || path;
+            const projectKey = path;
             const vars = resolveEnv(sections, activePreset, projectKey);
             
             // Override

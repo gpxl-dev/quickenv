@@ -1,0 +1,10 @@
+projects:
+  # Add project paths here (e.g. apps/web)
+  # - apps/web
+  # - path: apps/api
+  #   target: .env.local
+
+variables:
+  # Add sensitive variables here
+  # SECRET_KEY:
+  #   sensitive: true
