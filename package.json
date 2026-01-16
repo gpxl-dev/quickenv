@@ -1,5 +1,6 @@
 {
   "name": "quickenv",
+  "version": "0.1.0",
   "module": "index.ts",
   "type": "module",
   "private": true,
@@ -8,5 +9,12 @@
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.11.0",
+    "commander": "^14.0.2",
+    "ignore": "^7.0.5",
+    "yaml": "^2.8.2",
+    "zod": "^4.3.5"
   }
 }
