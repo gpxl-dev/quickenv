@@ -24,19 +24,19 @@ export function resolveEnv(
     }
   }
 
-  // Layer 2: Preset
-  for (const section of sections) {
-    if (section.tags.includes(preset)) {
-      applyVariables(section.variables);
+  // Layer 2: Project Specific (All presets)
+  if (project) {
+    for (const section of sections) {
+      if (section.tags.includes(project) || section.tags.includes(`${project}:*`)) {
+        applyVariables(section.variables);
+      }
     }
   }
 
-  // Layer 3: Project Specific (All presets)
-  if (project) {
-    for (const section of sections) {
-      if (section.tags.includes(project)) {
-        applyVariables(section.variables);
-      }
+  // Layer 3: Preset Specific (All projects)
+  for (const section of sections) {
+    if (section.tags.includes(preset)) {
+      applyVariables(section.variables);
     }
   }
 
@@ -44,7 +44,7 @@ export function resolveEnv(
   for (const section of sections) {
     for (const tag of section.tags) {
       if (project) {
-        if (tag === `${project}:${preset}`) {
+        if (tag === `${project}:${preset}` || tag === `*:${preset}`) {
           applyVariables(section.variables);
         }
       } else if (tag.endsWith(`:${preset}`)) {

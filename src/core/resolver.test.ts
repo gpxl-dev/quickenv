@@ -126,7 +126,7 @@ VAR_PROJECT=project-only
     expect(result).toEqual({ VAR_GLOBAL: "global", VAR_PROJECT: "project-only" });
   });
 
-  it("prioritizes project variables over preset variables", () => {
+  it("prioritizes preset variables over project variables", () => {
     const input = `
 [local]
 VAR=preset
@@ -135,6 +135,65 @@ VAR=project
 `;
     const sections = parseEnvQuick(input);
     const result = resolveEnv(sections, "local", "web");
-    expect(result).toEqual({ VAR: "project" });
+    expect(result).toEqual({ VAR: "preset" });
+  });
+
+  it("supports wildcards in project tags", () => {
+    const input = `
+SOME_TOP_LEVEL_VAR=test
+
+[apps/lexchex-oracle:*]
+OTHER_VAR=false
+
+[apps/lexchex-oracle:production]
+OTHER_VAR=true
+`;
+    const sections = parseEnvQuick(input);
+    
+    // Test with production preset
+    const resultProd = resolveEnv(sections, "production", "apps/lexchex-oracle");
+    expect(resultProd.SOME_TOP_LEVEL_VAR).toBe("test");
+    expect(resultProd.OTHER_VAR).toBe("true");
+
+    // Test with staging preset (should fallback to wildcard)
+    const resultStaging = resolveEnv(sections, "staging", "apps/lexchex-oracle");
+    expect(resultStaging.SOME_TOP_LEVEL_VAR).toBe("test");
+    expect(resultStaging.OTHER_VAR).toBe("false");
+  });
+
+  it("supports wildcards in preset tags", () => {
+    const input = `
+[*:local]
+DEBUG=true
+
+[web:local]
+DEBUG=false
+`;
+    const sections = parseEnvQuick(input);
+
+    // Test with web project (specific beats wildcard)
+    const resultWeb = resolveEnv(sections, "local", "web");
+    expect(resultWeb.DEBUG).toBe("false");
+
+    // Test with other project (wildcard matches)
+    const resultApi = resolveEnv(sections, "local", "api");
+    expect(resultApi.DEBUG).toBe("true");
+  });
+
+  it("prioritizes preset tags over project wildcard tags", () => {
+    const input = `
+[production]
+VAR=preset-important
+
+[web:*]
+VAR=project-default
+`;
+    const sections = parseEnvQuick(input);
+    const result = resolveEnv(sections, "production", "web");
+    
+    // If the user says [web:*] is lower specificity than :production, 
+    // then it should probably be 'preset-important'.
+    // Currently my code returns 'project-default' because Layer 3 > Layer 2.
+    expect(result.VAR).toBe("preset-important");
   });
 });
