@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { loadConfig, loadState } from "../core/config";
+import { loadConfig, loadState, resolveEnvQuickPath } from "../core/config";
 import { parseEnvQuick } from "../core/parser";
 import { resolveEnv } from "../core/resolver";
 import { maskValue } from "../core/masking";
@@ -19,9 +19,10 @@ export const listCommand = new Command("list")
       process.exit(1);
     }
     
-    const envFile = Bun.file(".env.quick");
+    const envPath = await resolveEnvQuickPath();
+    const envFile = Bun.file(envPath);
     if (!(await envFile.exists())) {
-      console.error(".env.quick not found. Run 'quickenv init'.");
+      console.error(`${envPath} not found. Run 'quickenv init'.`);
       process.exit(1);
     }
     const content = await envFile.text();

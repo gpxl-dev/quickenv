@@ -7,6 +7,7 @@ import { initCommand } from "./src/commands/init";
 import { setCommand } from "./src/commands/set";
 import { resetCommand } from "./src/commands/reset";
 import { scanCommand } from "./src/commands/scan";
+import { editCommand } from "./src/commands/edit";
 import { helpCommand } from "./src/commands/help";
 
 const program = new Command();
@@ -21,6 +22,7 @@ program.addCommand(scanCommand);
 program.addCommand(listCommand);
 program.addCommand(switchCommand);
 program.addCommand(setCommand);
+program.addCommand(editCommand);
 program.addCommand(resetCommand);
 program.addCommand(helpCommand);
 

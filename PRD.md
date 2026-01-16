@@ -27,6 +27,7 @@ Located in the repository root. This file uses an INI-like format with tags to d
 
 2.3 .quickenv.state (Active State)
 A gitignored JSON file that tracks the current active preset (e.g., {"activePreset": "local"}).
+- **New:** Allows configuring a custom path to the `.env.quick` file (e.g., `{"envPath": "../shared/.env.quick"}`). This enables sharing a single environment file across multiple monorepo roots or related projects.
 
 ---
 
@@ -58,6 +59,8 @@ Updates a variable across projects/presets.
 - TUI: Guided flow to choose variable, projects, and target presets.
 3.5 reset
 Reverts local project .env files to match exactly what is defined in the current .env.quick preset. Useful if manual edits were made to local .env files.
+3.6 edit
+Opens the .env.quick file in the default editor (respects $VISUAL and $EDITOR).
 ---
 
 4. Security & Privacy

@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import * as p from "@clack/prompts";
-import { loadConfig, loadState, saveState } from "../core/config";
+import { loadConfig, loadState, saveState, resolveEnvQuickPath } from "../core/config";
 import { parseEnvQuick, type QuickEnvSection } from "../core/parser";
 import { resolveEnv } from "../core/resolver";
 import { join } from "path";
@@ -25,10 +25,11 @@ export async function performSwitch(preset: string, rootDir: string = process.cw
             process.exit(1);
     }
 
-    const envPath = join(rootDir, ".env.quick");
+    const statePath = join(rootDir, ".quickenv.state");
+    const envPath = await resolveEnvQuickPath(statePath);
     const envFile = Bun.file(envPath);
     if (!(await envFile.exists())) {
-        console.error(".env.quick not found.");
+        console.error(`.env.quick not found at ${envPath}`);
         process.exit(1);
     }
     
@@ -63,8 +64,7 @@ export async function performSwitch(preset: string, rootDir: string = process.cw
         console.log(`Updated ${targetPath}`);
     }
     
-    const statePath = join(rootDir, ".quickenv.state");
-    await saveState({ activePreset: preset }, statePath);
+    await saveState({ ...await loadState(statePath), activePreset: preset }, statePath);
     console.log(`Switched to preset '${preset}'.`);
 }
 
@@ -75,9 +75,10 @@ export const switchCommand = new Command("switch")
         let preset = presetArg;
         
         if (!preset) {
-            const envFile = Bun.file(".env.quick");
+            const envPath = await resolveEnvQuickPath();
+            const envFile = Bun.file(envPath);
             if (!(await envFile.exists())) {
-                 console.error(".env.quick not found.");
+                 console.error(`.env.quick not found at ${envPath}`);
                  process.exit(1);
             }
             const content = await envFile.text();

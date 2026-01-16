@@ -5,7 +5,7 @@ import { join, relative, dirname, basename } from "path";
 import { readdir } from "node:fs/promises";
 import { stat } from "node:fs/promises";
 import YAML from "yaml";
-import { loadConfig, type Config } from "../core/config";
+import { loadConfig, type Config, resolveEnvQuickPath } from "../core/config";
 import { parseEnvQuick, type QuickEnvSection } from "../core/parser";
 
 async function scanFiles(dir: string, ig: any, rootDir: string): Promise<string[]> {
@@ -152,7 +152,7 @@ export async function performScan(rootDir: string, options: { yes?: boolean } = 
     }
 
     // 2. Update .env.quick
-    const quickPath = join(rootDir, ".env.quick");
+    const quickPath = await resolveEnvQuickPath(join(rootDir, ".quickenv.state"));
     const quickFile = Bun.file(quickPath);
     let quickContent = "";
     let sections: QuickEnvSection[] = [];
@@ -189,13 +189,13 @@ export async function performScan(rootDir: string, options: { yes?: boolean } = 
 
     if (envChanged) {
         p.log.info("Found new variables from .env files.");
-        if (options.yes || await p.confirm({ message: "Update .env.quick with found variables?" })) {
+        if (options.yes || await p.confirm({ message: `Update ${quickPath} with found variables?` })) {
             const newContent = stringifyEnvQuick(sections);
             await Bun.write(quickPath, newContent);
-            p.log.success("Updated .env.quick");
+            p.log.success(`Updated ${quickPath}`);
         }
     } else {
-        p.log.info("No new variables to add to .env.quick");
+        p.log.info(`No new variables to add to ${quickPath}`);
     }
 
     p.outro("Scan complete!");

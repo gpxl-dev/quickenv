@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { loadConfig, loadState } from "../core/config";
+import { loadConfig, loadState, resolveEnvQuickPath } from "../core/config";
 import { performSwitch } from "./switch";
 import { parseEnvQuick, type QuickEnvSection } from "../core/parser";
 import { resolveEnv } from "../core/resolver";
@@ -9,7 +9,7 @@ export const setCommand = new Command("set")
   .description("Updates a variable across projects/presets")
   .argument("<key>", "Variable name")
   .argument("[value]", "Variable value")
-  .option("-p, --persist", "Persist change to .env.quick")
+  .option("-p, --persist", "Persist change to the environment file (e.g. .env.quick)")
   .option("--preset <preset>", "Target preset (defaults to active)")
   .action(async (key, value, options) => {
       const state = await loadState();
@@ -33,14 +33,15 @@ export const setCommand = new Command("set")
           // Append to .env.quick
           
           let content = "";
-          const file = Bun.file(".env.quick");
+          const envPath = await resolveEnvQuickPath();
+          const file = Bun.file(envPath);
           if (await file.exists()) {
               content = await file.text();
           }
           
           const append = `\n[${targetPreset}]\n${key}=${val}\n`;
-          await Bun.write(".env.quick", content + append);
-          console.log(`Persisted ${key}=${val} to .env.quick for preset '${targetPreset}'`);
+          await Bun.write(envPath, content + append);
+          console.log(`Persisted ${key}=${val} to ${envPath} for preset '${targetPreset}'`);
           
           if (targetPreset === activePreset) {
               await performSwitch(activePreset);
@@ -49,7 +50,8 @@ export const setCommand = new Command("set")
           // Ephemeral update
           console.log("Applying temporary update...");
           
-          const envFile = Bun.file(".env.quick");
+          const envPath = await resolveEnvQuickPath();
+          const envFile = Bun.file(envPath);
           let sections: QuickEnvSection[] = [];
           if (await envFile.exists()) {
               const content = await envFile.text();
@@ -57,11 +59,12 @@ export const setCommand = new Command("set")
           }
           
           const projects = config.projects || [];
-          for (const proj of projects) {
+           for (const proj of projects) {
             let path: string;
-            let target = ".env";
+            let target = config.defaultTarget || ".env";
             
             if (typeof proj === "string") {
+
                 path = proj;
             } else {
                 path = proj.path;

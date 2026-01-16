@@ -1,7 +1,6 @@
 import { z } from "zod";
 import YAML from "yaml";
-import { existsSync } from "fs"; // Bun supports node:fs/promises etc, but Bun.file is better.
-// But existence check: await Bun.file(path).exists()
+import { join, isAbsolute } from "path";
 
 export const ConfigSchema = z.object({
   projects: z.array(z.union([
@@ -23,10 +22,30 @@ export const ConfigSchema = z.object({
 export type Config = z.infer<typeof ConfigSchema>;
 
 export const StateSchema = z.object({
-  activePreset: z.string().optional()
+  activePreset: z.string().optional(),
+  envPath: z.string().optional()
 });
 
 export type State = z.infer<typeof StateSchema>;
+
+export async function resolveEnvQuickPath(statePath = ".quickenv.state"): Promise<string> {
+  const state = await loadState(statePath);
+  if (state.envPath) {
+    if (isAbsolute(state.envPath)) {
+      return state.envPath;
+    }
+    // Relative to the directory containing the state file
+    const baseDir = statePath.endsWith(".quickenv.state") 
+      ? statePath.slice(0, -".quickenv.state".length) 
+      : "";
+    return join(baseDir, state.envPath);
+  }
+  
+  const baseDir = statePath.endsWith(".quickenv.state") 
+    ? statePath.slice(0, -".quickenv.state".length) 
+    : "";
+  return join(baseDir, ".env.quick");
+}
 
 export async function loadConfig(path = "quickenv.yaml"): Promise<Config | null> {
   const file = Bun.file(path);

@@ -37,9 +37,24 @@ ${bold("FILES")}
          Setting ${underline("sensitive: true")} ensures that the variable's value is 
          masked or handled securely (e.g., during logs or display).
 
+         ${underline("The projects section:")}
+         Defines which directories should receive environment variables.
+         Each project can specify a custom ${underline("target")} filename.
+
+         ${green("projects:")}
+         ${green("  - path: apps/web")}
+         ${green("    target: .env.local  # Custom target file")}
+         ${green("  - apps/api             # Defaults to .env")}
+
+         ${green("defaultTarget: .env.local  # Global default for all projects")}
+
+         By default, ${bold("quickenv")} writes to ${bold(".env")}. Use ${underline("target")} 
+         to change this per project, or ${underline("defaultTarget")} for all.
+
      ${bold(".env.quick")}
          The source of truth for all environment variables. It supports 
-         grouping variables using tags.
+         grouping variables using tags. By default, it is located in the root 
+         directory, but the path can be customized in ${bold(".quickenv.state")}.
 
          ${underline("Tagging System:")}
          Tags are defined in square brackets. Variables following a tag 
@@ -80,6 +95,7 @@ ${bold("COMMANDS")}
      ${bold("list")}       List all projects and their current environment status.
      ${bold("switch")}     Interactively switch between environments (tags).
      ${bold("set")}        Set a variable in .env.quick and sync it.
+     ${bold("edit")}       Open the .env.quick file in your default editor.
      ${bold("reset")}      Remove all managed .env files.
 
 ${bold("SEE ALSO")}

@@ -3,7 +3,7 @@ import { loadState } from "../core/config";
 import { performSwitch } from "./switch";
 
 export const resetCommand = new Command("reset")
-  .description("Reverts local project .env files to match exactly what is defined in the current .env.quick preset")
+  .description("Reverts local project .env files to match exactly what is defined in the current environment preset")
   .action(async () => {
       const state = await loadState();
       if (!state.activePreset) {

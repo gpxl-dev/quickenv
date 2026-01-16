@@ -2,6 +2,7 @@ import { Command } from "commander";
 import * as p from "@clack/prompts";
 import ignore from "ignore";
 import { join, dirname } from "path";
+import { resolveEnvQuickPath } from "../core/config";
 
 export const initCommand = new Command("init")
     .description("Guided setup to bootstrap quickenv in a repository")
@@ -62,7 +63,9 @@ export const initCommand = new Command("init")
             const projectsExample = `  # Add project paths here (e.g. apps/web)
   # - apps/web
   # - path: apps/api
-  #   target: .env.local`;
+  #   target: .env.local
+
+# defaultTarget: .env.local`;
             
             const projectLines = projectList.length > 0 
                 ? projectList.map(p => `  - ${p}`).join("\n")
@@ -83,7 +86,8 @@ variables:
         }
         
         // 4. Generate .env.quick
-        if (!(await Bun.file(".env.quick").exists())) {
+        const envPath = await resolveEnvQuickPath();
+        if (!(await Bun.file(envPath).exists())) {
             let initialEnvContent = `# Shared variables
 # NODE_ENV=development
 
@@ -107,10 +111,10 @@ DEBUG=true
                 initialEnvContent += `\n# Imported from .env.example\n${content}`;
             }
 
-            await Bun.write(".env.quick", initialEnvContent);
-            p.log.success("Created .env.quick");
+            await Bun.write(envPath, initialEnvContent);
+            p.log.success(`Created ${envPath}`);
         } else {
-            p.log.info(".env.quick already exists. Skipping.");
+            p.log.info(`${envPath} already exists. Skipping.`);
         }
         
         // 5. Update .gitignore
@@ -133,11 +137,11 @@ DEBUG=true
             ig.add(".quickenv.state");
         }
 
-        if (!ig.ignores(".env.quick")) {
+        if (!ig.ignores(envPath)) {
             if (content.length > 0 && !content.endsWith("\n")) content += "\n";
-            content += "# quickenv secrets\n.env.quick\n";
+            content += `# quickenv secrets\n${envPath}\n`;
             updated = true;
-            p.log.success("Added .env.quick to .gitignore");
+            p.log.success(`Added ${envPath} to .gitignore`);
         }
 
         if (updated) {
