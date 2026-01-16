@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import * as p from "@clack/prompts";
+import ignore from "ignore";
 import { join, dirname } from "path";
 
 export const initCommand = new Command("init")
@@ -98,16 +99,36 @@ variables:
         
         // 5. Update .gitignore
         const gitignore = Bun.file(".gitignore");
-        if (await gitignore.exists()) {
-            let content = await gitignore.text();
-            if (!content.includes(".quickenv.state")) {
-                content += "\n# quickenv state\n.quickenv.state\n";
-                await Bun.write(".gitignore", content);
-                p.log.success("Added .quickenv.state to .gitignore");
+        let content = "";
+        const exists = await gitignore.exists();
+        
+        if (exists) {
+            content = await gitignore.text();
+        }
+
+        const ig = ignore().add(content);
+        let updated = false;
+
+        if (!ig.ignores(".quickenv.state")) {
+            if (content.length > 0 && !content.endsWith("\n")) content += "\n";
+            content += "# quickenv state\n.quickenv.state\n";
+            updated = true;
+            p.log.success("Added .quickenv.state to .gitignore");
+            ig.add(".quickenv.state");
+        }
+
+        if (!ig.ignores(".env.quick")) {
+            if (content.length > 0 && !content.endsWith("\n")) content += "\n";
+            content += "# quickenv secrets\n.env.quick\n";
+            updated = true;
+            p.log.success("Added .env.quick to .gitignore");
+        }
+
+        if (updated) {
+            await Bun.write(".gitignore", content);
+            if (!exists) {
+                p.log.success("Created .gitignore");
             }
-        } else {
-             await Bun.write(".gitignore", ".quickenv.state\n");
-             p.log.success("Created .gitignore with .quickenv.state");
         }
         
         p.outro("Setup complete! Run 'quickenv switch' to start.");
