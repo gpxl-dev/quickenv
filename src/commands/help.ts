@@ -56,38 +56,48 @@ ${bold("FILES")}
          grouping variables using tags. By default, it is located in the root 
          directory, but the path can be customized in ${bold(".quickenv.state")}.
 
-         ${underline("Tagging System:")}
-         Tags are defined in square brackets. Variables following a tag 
-         belong to that environment/scope.
+          ${underline("Tagging System:")}
+          Tags are defined in square brackets. Variables following a tag 
+          belong to that environment/scope. Wildcards (${bold("*")}) can be used 
+          to match all presets or all projects.
 
-         ${green("# Global variables (shared across all environments)")}
-         ${green("NODE_ENV=development")}
+          ${green("# Global variables (shared across all environments)")}
+          ${green("NODE_ENV=development")}
 
-         ${green("[local]")}
-         ${green("# Only applied when 'local' is switched on")}
-         ${green("API_URL=http://localhost:3000")}
+          ${green("[local]")}
+          ${green("# Only applied when 'local' is switched on")}
+          ${green("API_URL=http://localhost:3000")}
 
-         ${green("[production, staging]")}
-         ${green("# Shared between production and staging environments")}
-         ${green("DB_HOST=cloud-db.internal")}
+          ${green("[production, staging]")}
+          ${green("# Shared between production and staging environments")}
+          ${green("DB_HOST=cloud-db.internal")}
 
-         ${underline("Project-Specific Overrides:")}
-         You can target specific projects within an environment or define
-         constants for a project that persist across all presets.
+          ${underline("Project and Wildcard Scoping:")}
+          You can target specific projects, use wildcards for all presets 
+          within a project, or all projects for a specific preset.
 
-         ${green("[apps/web]")}
-         ${green("# Constant for 'apps/web' project, regardless of preset")}
-         ${green("NEXT_PUBLIC_API_VERSION=v2")}
+          ${green("[apps/web]")}
+          ${green("# Constant for 'apps/web' project, regardless of preset")}
+          ${green("NEXT_PUBLIC_API_VERSION=v2")}
 
-         ${green("[apps/web:local]")}
-         ${green("# Only for 'apps/web' when 'local' preset is active")}
-         ${green("DEBUG_LEVEL=verbose")}
+          ${green("[apps/web:*]")}
+          ${green("# Same as [apps/web], matches all presets for this project")}
+          ${green("LOG_LEVEL=info")}
 
-         ${underline("Precedence Order:")}
-         1. ${bold("Project:Preset")} (e.g. [apps/web:local]) - Highest priority
-         2. ${bold("Project")} (e.g. [apps/web])
-         3. ${bold("Preset")} (e.g. [local])
-         4. ${bold("Global")} (Untagged at top of file) - Lowest priority
+          ${green("[*:production]")}
+          ${green("# Applied to all projects when 'production' preset is active")}
+          ${green("SENTRY_ENABLED=true")}
+
+          ${green("[apps/web:local]")}
+          ${green("# Only for 'apps/web' when 'local' preset is active")}
+          ${green("DEBUG_LEVEL=verbose")}
+
+          ${underline("Precedence Order:")}
+          1. ${bold("Project:Preset")} (e.g. [apps/web:local] or [*:local]) - Highest
+          2. ${bold("Preset")} (e.g. [local])
+          3. ${bold("Project")} (e.g. [apps/web] or [apps/web:*])
+          4. ${bold("Global")} (Untagged at top of file) - Lowest
+
 
 ${bold("COMMANDS")}
      ${bold("init")}       Guided setup to bootstrap quickenv in a repository.

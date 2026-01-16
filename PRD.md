@@ -18,11 +18,17 @@ Located in the repository root. Defines the structure of the monorepo and securi
 
 2.2 .env.quick (The Source of Truth)
 Located in the repository root. This file uses an INI-like format with tags to define which variables apply to which presets and projects.
-- Tags: [preset1, preset2] for global preset values, or [project:preset] for project-specific overrides.
+- Tags: 
+  - `[preset1, preset2]` for global preset values.
+  - `[project:preset]` for project-specific overrides.
+  - `[project:*]` or `[project]` for project-specific defaults across all presets.
+  - `[*:preset]` for preset-specific defaults across all projects.
 - Precedence:
-  1. [project:preset] (Highest)
-  2. [preset]
-  3. Last definition in the file (if specificity is equal).
+  1. `[project:preset]` or `[*:preset]` (Highest)
+  2. `[preset]`
+  3. `[project:*]` or `[project]`
+  4. `Global` (untagged variables at the top of the file) (Lowest)
+  5. Last definition in the file (if specificity is equal).
 - Unset Values: KEY= (empty value) explicitly removes the variable from the target .env file during synchronization.
 
 2.3 .quickenv.state (Active State)
