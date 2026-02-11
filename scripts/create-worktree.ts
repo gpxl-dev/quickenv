@@ -206,10 +206,10 @@ async function createWorktree(branchArg: string | WorktreeOptions, opts?: Worktr
 
     if (branchExists) {
       // Branch exists, create worktree from it
-      await $`cd ${mainWorktree} && git worktree add "${worktreePath}" "${branch}"`.quiet();
+      await $`cd ${mainWorktree} && git worktree add "${worktreePath}" "${branch}"`;
     } else {
       // Create new branch and worktree
-      await $`cd ${mainWorktree} && git worktree add "${worktreePath}" -b "${branch}"`.quiet();
+      await $`cd ${mainWorktree} && git worktree add "${worktreePath}" -b "${branch}"`;
     }
   } catch (error) {
     p.log.error(`Failed to create worktree: ${error}`);
@@ -250,14 +250,23 @@ async function createWorktree(branchArg: string | WorktreeOptions, opts?: Worktr
     try {
       const mainState = await mainStateFile.json();
       if (mainState.envPath) {
-         // Calculate relative path from new worktree to main's envPath
-         // envPath is relative to repo root, so we need to go up one level from worktree
-         // and point to main worktree's .quickenv/.env.quick
-         const envPath = mainState.envPath.startsWith("/")
-           ? mainState.envPath
-           : join("..", basename(mainWorktree), mainState.envPath);
-         newState.envPath = envPath;
-        p.log.success(`Linked to shared env file: ${envPath}`);
+        // Calculate relative path from new worktree to main's envPath
+        // envPath can be a string or array of strings
+        const calculateRelativePath = (path: string): string => {
+          return path.startsWith("/") ? path : join("..", basename(mainWorktree), path);
+        };
+
+        if (Array.isArray(mainState.envPath)) {
+          // Handle array of paths
+          const envPaths = mainState.envPath.map(calculateRelativePath);
+          newState.envPath = envPaths;
+          p.log.success(`Linked to shared env files: ${envPaths.join(", ")}`);
+        } else {
+          // Handle single string path
+          const envPath = calculateRelativePath(mainState.envPath);
+          newState.envPath = envPath;
+          p.log.success(`Linked to shared env file: ${envPath}`);
+        }
       }
     } catch {
       // Ignore parse errors
