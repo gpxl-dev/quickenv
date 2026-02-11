@@ -253,7 +253,13 @@ async function createWorktree(branchArg: string | WorktreeOptions, opts?: Worktr
         // Calculate relative path from new worktree to main's envPath
         // envPath can be a string or array of strings
         const calculateRelativePath = (path: string): string => {
-          return path.startsWith("/") ? path : join("..", basename(mainWorktree), path);
+          if (path.startsWith("/")) {
+            return path;
+          }
+          if (path.startsWith("../")) {
+            return join("..", basename(mainWorktree), path);
+          }
+          return path;
         };
 
         if (Array.isArray(mainState.envPath)) {

@@ -157,7 +157,13 @@ describe("create-worktree envPath handling", () => {
     const newState: Record<string, unknown> = {};
     const repoName = basename(repoDir);
     const calculateRelativePath = (path: string): string => {
-      return path.startsWith("/") ? path : join("..", repoName, path);
+      if (path.startsWith("/")) {
+        return path;
+      }
+      if (path.startsWith("../")) {
+        return join("..", repoName, path);
+      }
+      return path;
     };
     const transformedPaths = envPaths.map(calculateRelativePath);
     newState.envPath = transformedPaths;
@@ -173,10 +179,11 @@ describe("create-worktree envPath handling", () => {
     
     expect(Array.isArray(worktreeState.envPath)).toBe(true);
     expect(worktreeState.envPath).toHaveLength(2);
-    // Paths should be transformed - note: path.join normalizes redundant segments
-    // ../main-repo/../shared/.env.quick becomes ../shared/.env.quick
+    // Paths starting with ../ should be transformed (but gets normalized)
+    // join("..", "main-repo", "../shared/.env.quick") normalizes to "../shared/.env.quick"
     expect(worktreeState.envPath[0]).toBe("../shared/.env.quick");
-    expect(worktreeState.envPath[1]).toBe(`../${repoName}/.env.quick`);
+    // Local relative paths should stay as-is
+    expect(worktreeState.envPath[1]).toBe(".env.quick");
 
     // Cleanup worktree
     await $`cd ${repoDir} && git worktree remove "${worktreeDir}" --force`.quiet();
@@ -205,7 +212,13 @@ describe("create-worktree envPath handling", () => {
     if (mainState.envPath) {
       const repoName = basename(repoDir);
       const calculateRelativePath = (path: string): string => {
-        return path.startsWith("/") ? path : join("..", repoName, path);
+        if (path.startsWith("/")) {
+          return path;
+        }
+        if (path.startsWith("../")) {
+          return join("..", repoName, path);
+        }
+        return path;
       };
       if (Array.isArray(mainState.envPath)) {
         newState.envPath = mainState.envPath.map(calculateRelativePath);
