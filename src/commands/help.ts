@@ -99,17 +99,32 @@ ${bold("FILES")}
           4. ${bold("Global")} (Untagged at top of file) - Lowest
 
 
-${bold("COMMANDS")}
-     ${bold("init")}       Guided setup to bootstrap quickenv in a repository.
-     ${bold("scan")}       Scan for .env.example files to discover projects.
-     ${bold("list")}       List all projects and their current environment status.
-     ${bold("switch")}     Interactively switch between environments (tags).
-     ${bold("reload")}     Reloads the current preset without prompting.
-     ${bold("set")}        Set a variable in .env.quick and sync it.
-     ${bold("edit")}       Open the .env.quick file in your default editor.
-     ${bold("reset")}      Remove all managed .env files.
+      ${bold("COMMANDS")}
+      ${bold("init")}       Guided setup to bootstrap quickenv in a repository.
+      ${bold("scan")}       Scan for .env.example files to discover projects.
+      ${bold("list")}       List all projects and their current environment status.
+      ${bold("switch")}     Interactively switch between environments (tags).
+      ${bold("reload")}     Reloads the current preset without prompting.
+      ${bold("set")}        Set a variable in .env.quick and sync it.
+      ${bold("edit")}       Open the .env.quick file in your default editor.
+      ${bold("reset")}      Remove all managed .env files.
+      ${bold("worktree")}   Create a new git worktree with quickenv support (see HOOKS below).
 
-${bold("SEE ALSO")}
+${bold("HOOKS")}
+      Post-worktree hooks allow you to run custom scripts after creating a new
+      git worktree. Place a hook file in ${bold(".quickenv/hooks/post-worktree.{ts,sh}")}.
+
+      The hook runs from the newly created worktree directory with these 
+      environment variables:
+          WORKTREE_PATH   Absolute path to the new worktree
+          BRANCH_NAME     Name of the branch for the worktree
+
+      Supported formats (in order of priority):
+          .ts    TypeScript (runs with Bun)
+          .sh    Shell script
+
+      If a hook fails (non-zero exit), a warning is shown but worktree 
+      creation continues. Hook output is piped to the terminal.
      https://github.com/your-repo/quickenv
 `);
     });
