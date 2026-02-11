@@ -151,14 +151,18 @@ async function runPostWorktreeHook(
   }
 }
 
-async function createWorktree(options: WorktreeOptions) {
+async function createWorktree(branchArg: string | WorktreeOptions, opts?: WorktreeOptions) {
+  // Handle both standalone CLI (options only) and subcommand (branch, options) signatures
+  const options: WorktreeOptions = opts || (typeof branchArg === 'object' ? branchArg : {});
+  const branchFromArg = typeof branchArg === 'string' ? branchArg : undefined;
+
   p.intro("quickenv worktree");
 
   const mainWorktree = await findGitRoot(process.cwd());
   const currentBranch = await getCurrentBranch(mainWorktree);
 
   // Get or prompt for branch name
-  let branch = options.branch;
+  let branch = branchFromArg || options.branch;
   if (!branch) {
     const input = await p.text({
       message: "Enter a branch name:",
@@ -274,13 +278,23 @@ async function createWorktree(options: WorktreeOptions) {
   console.log("  quickenv switch <preset>");
 }
 
-const program = new Command();
-program
-  .name("create-worktree")
+export const worktreeCommand = new Command("worktree")
   .description("Create a new git worktree with quickenv support")
   .argument("[branch]", "Branch name to create")
   .option("-p, --path <path>", "Path for the new worktree")
   .option("-f, --from <path>", "Source worktree path (defaults to current)")
   .action(createWorktree);
 
-program.parse();
+// Only parse if this file is run directly (not imported)
+if (import.meta.main) {
+  const program = new Command();
+  program
+    .name("create-worktree")
+    .description("Create a new git worktree with quickenv support")
+    .argument("[branch]", "Branch name to create")
+    .option("-p, --path <path>", "Path for the new worktree")
+    .option("-f, --from <path>", "Source worktree path (defaults to current)")
+    .action(createWorktree);
+
+  program.parse();
+}
