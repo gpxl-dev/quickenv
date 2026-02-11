@@ -51,10 +51,10 @@ ${bold("FILES")}
          By default, ${bold("quickenv")} writes to ${bold(".env")}. Use ${underline("target")} 
          to change this per project, or ${underline("defaultTarget")} for all.
 
-     ${bold(".env.quick")}
-         The source of truth for all environment variables. It supports 
-         grouping variables using tags. By default, it is located in the root 
-         directory, but the path can be customized in ${bold(".quickenv.state")}.
+      ${bold(".quickenv/.env.quick")}
+          The source of truth for all environment variables. It supports
+          grouping variables using tags. Located in the .quickenv directory.
+          The path can be customized via envPath in ${bold(".quickenv/.quickenv.state")}.
 
           ${underline("Tagging System:")}
           Tags are defined in square brackets. Variables following a tag 

@@ -28,14 +28,15 @@ projects:
 `;
         await writeFile(configPath, configContent);
 
-        const envQuickPath = join(tmpDir, ".env.quick");
+        const envQuickPath = join(tmpDir, ".quickenv/.env.quick");
         const envQuickContent = `
 [dev]
 VAR=old
 `;
+        await mkdir(join(tmpDir, ".quickenv"), { recursive: true });
         await writeFile(envQuickPath, envQuickContent);
 
-        const statePath = join(tmpDir, ".quickenv.state");
+        const statePath = join(tmpDir, ".quickenv/.quickenv.state");
         await saveState({ activePreset: "dev" }, statePath);
 
         // Change current directory to tmpDir to simulate running the command there

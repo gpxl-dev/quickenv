@@ -48,7 +48,7 @@ describe("scan command", () => {
         expect(projects).not.toContain("ignored_dir");
 
         // Verify .env.quick
-        const quickFile = Bun.file(join(tmpDir, ".env.quick"));
+        const quickFile = Bun.file(join(tmpDir, ".quickenv/.env.quick"));
         expect(await quickFile.exists()).toBe(true);
         const quickContent = await quickFile.text();
         const sections = parseEnvQuick(quickContent);

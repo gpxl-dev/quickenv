@@ -33,23 +33,24 @@ export const StateSchema = z.object({
 
 export type State = z.infer<typeof StateSchema>;
 
-export async function resolveEnvQuickPath(statePath = ".quickenv.state"): Promise<string> {
+const DEFAULT_STATE_PATH = ".quickenv/.quickenv.state";
+
+export async function resolveEnvQuickPath(statePath = DEFAULT_STATE_PATH): Promise<string> {
   const state = await loadState(statePath);
   if (state.envPath) {
     if (isAbsolute(state.envPath)) {
       return state.envPath;
     }
-    // Relative to the directory containing the state file
-    const baseDir = statePath.endsWith(".quickenv.state") 
-      ? statePath.slice(0, -".quickenv.state".length) 
-      : "";
-    return join(baseDir, state.envPath);
+    // Relative paths are resolved from repo root
+    return state.envPath;
   }
-  
-  const baseDir = statePath.endsWith(".quickenv.state") 
-    ? statePath.slice(0, -".quickenv.state".length) 
+
+  // Default location is .quickenv/.env.quick relative to the state file's directory
+  // If statePath ends with .quickenv/.quickenv.state, default to .quickenv/.env.quick in the same directory
+  const baseDir = statePath.endsWith(".quickenv/.quickenv.state")
+    ? statePath.slice(0, -".quickenv/.quickenv.state".length)
     : "";
-  return join(baseDir, ".env.quick");
+  return join(baseDir, ".quickenv/.env.quick");
 }
 
 export async function loadConfig(path = "quickenv.yaml"): Promise<Config | null> {
@@ -74,7 +75,7 @@ export async function loadConfig(path = "quickenv.yaml"): Promise<Config | null>
   }
 }
 
-export async function loadState(path = ".quickenv.state"): Promise<State> {
+export async function loadState(path = DEFAULT_STATE_PATH): Promise<State> {
   const file = Bun.file(path);
   if (!(await file.exists())) {
     return {};
@@ -88,6 +89,6 @@ export async function loadState(path = ".quickenv.state"): Promise<State> {
   }
 }
 
-export async function saveState(state: State, path = ".quickenv.state"): Promise<void> {
+export async function saveState(state: State, path = DEFAULT_STATE_PATH): Promise<void> {
   await Bun.write(path, JSON.stringify(state, null, 2));
 }

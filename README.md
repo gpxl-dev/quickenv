@@ -6,7 +6,7 @@ A bunx utility for managing environment variables across monorepos through a cen
 
 Managing multiple `.env` files across a monorepo is tedious and error-prone. quickenv solves this by:
 
-- **Single source of truth**: Define all environment variables in one `.env.quick` file
+- **Single source of truth**: Define all environment variables in one `.quickenv/.env.quick` file
 - **Tagged environments**: Use presets like `[local]`, `[production]` to organize variables
 - **Monorepo-aware**: Different values per project in your monorepo
 - **Git-safe**: Separates metadata (committable) from secrets (gitignored)
@@ -53,18 +53,19 @@ quickenv-worktree feature/my-branch
 
 ```
 repo-root/
-├── quickenv.yaml       # Metadata & configuration (committable)
-├── .env.quick          # Source of truth for all env vars (gitignored)
-├── .quickenv.state     # Tracks active preset (gitignored)
+├── quickenv.yaml          # Metadata & configuration (committable)
+├── .quickenv/
+│   ├── .env.quick         # Source of truth for all env vars (gitignored)
+│   └── .quickenv.state    # Tracks active preset (gitignored)
 ├── .gitignore
 └── apps/
     ├── web/
-    │   └── .env.local  # Generated from .env.quick
+    │   └── .env.local     # Generated from .quickenv/.env.quick
     └── api/
-        └── .env.local  # Generated from .env.quick
+        └── .env.local     # Generated from .quickenv/.env.quick
 ```
 
-### The .env.quick Format
+### The .quickenv/.env.quick Format
 
 A tagged INI-like format supporting multiple presets and projects:
 
@@ -104,8 +105,8 @@ DEBUG=  # Empty value removes this var in production
 | `list` (or `show`) | Display effective variables for active preset |
 | `switch [preset]` | Sync all projects to a preset (interactive TUI if no preset) |
 | `set [key] [value]` | Update variables across presets |
-| `reset` | Revert local .env files to match .env.quick |
-| `edit` | Open .env.quick in $EDITOR |
+| `reset` | Revert local .env files to match .quickenv/.env.quick |
+| `edit` | Open .quickenv/.env.quick in $EDITOR |
 | `reload` | Re-sync without changing preset |
 | `worktree [branch]` | Create new git worktree with quickenv support |
 
@@ -118,7 +119,7 @@ bunx quickenv switch production
 # View variables for a specific suffix
 bunx quickenv list --suffix .production
 
-# Set a variable persistently in .env.quick
+# Set a variable persistently in .quickenv/.env.quick
 bunx quickenv set API_KEY secret123 --persist
 
 # Interactive TUI for choosing projects and presets
@@ -169,7 +170,7 @@ quickenv works seamlessly with git worktrees. When you create a new worktree, yo
 1. Create a `.worktreeinclude` file in your main worktree:
 ```
 # Files to copy when creating new worktrees
-.env.quick
+.quickenv/.env.quick
 ```
 
 2. Create a new worktree with quickenv support:
@@ -181,20 +182,22 @@ quickenv-worktree feature/my-branch
 This will:
 - Create a new git worktree for the branch
 - Copy files listed in `.worktreeinclude`
-- Initialize `.quickenv.state` with `envPath` pointing to the main worktree's `.env.quick`
+- Initialize `.quickenv/.quickenv.state` with `envPath` pointing to the main worktree's `.quickenv/.env.quick`
 
 ### Worktree Configuration
 
-Each worktree has its own `.quickenv.state` (tracking active preset) with `envPath` pointing to the shared `.env.quick`:
+Each worktree has its own `.quickenv/.quickenv.state` (tracking active preset) with `envPath` pointing to the shared `.quickenv/.env.quick`:
 
 ```
 main-worktree/
-├── .quickenv.state     # activePreset: production
-└── .env.quick          # Shared secrets
+├── .quickenv/
+│   ├── .quickenv.state  # activePreset: production
+│   └── .env.quick       # Shared secrets
 
 feature-worktree/
-├── .quickenv.state     # activePreset: local, envPath: ../main-worktree/.env.quick
-└── .quickenv.state     # activePreset: local (worktree-specific)
+├── .quickenv/
+│   ├── .quickenv.state  # activePreset: local, envPath: ../main-worktree/.quickenv/.env.quick
+│   └── .env.quick       # activePreset: local (worktree-specific)
 ```
 
 This allows each worktree to have its own active preset while sharing the same environment definitions.
@@ -202,7 +205,7 @@ This allows each worktree to have its own active preset while sharing the same e
 ## Security
 
 - **No secrets in config**: `quickenv.yaml` is designed to be committed; it contains metadata only
-- **Gitignore respect**: Never reads or commits gitignored files (except `.quickenv.state`)
+- **Gitignore respect**: Never reads or commits gitignored files (except `.quickenv/.quickenv.state`)
 - **Sensitive masking**: Automatically masks sensitive variables in CLI output
 - **Default masking**: Shows first/last 4 chars for values > 16 chars, or first/last 2 for shorter
 

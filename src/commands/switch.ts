@@ -38,7 +38,7 @@ export async function performSwitch(preset: string, rootDir: string = process.cw
         }
     }
 
-    const statePath = join(rootDir, ".quickenv.state");
+    const statePath = join(rootDir, ".quickenv/.quickenv.state");
     const envPath = await resolveEnvQuickPath(statePath);
     const envFile = Bun.file(envPath);
     if (!(await envFile.exists())) {

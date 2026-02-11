@@ -31,7 +31,8 @@ projects:
 `;
         await writeFile(configPath, configContent);
 
-        const envQuickPath = join(tmpDir, ".env.quick");
+        await mkdir(join(tmpDir, ".quickenv"), { recursive: true });
+        const envQuickPath = join(tmpDir, ".quickenv/.env.quick");
         const envQuickContent = `
 [dev]
 API_URL=http://localhost:3000
@@ -67,11 +68,12 @@ projects:
 `;
         await writeFile(configPath, configContent);
 
-        const envQuickPath = join(tmpDir, ".env.quick");
+        const envQuickPath = join(tmpDir, ".quickenv/.env.quick");
         const envQuickContent = `
 [apps/nested/web:dev]
 NESTED_VAR=true
 `;
+        await mkdir(join(tmpDir, ".quickenv"), { recursive: true });
         await writeFile(envQuickPath, envQuickContent);
 
         await performSwitch("dev", tmpDir);
@@ -96,11 +98,12 @@ presets:
 `;
         await writeFile(configPath, configContent);
 
-        const envQuickPath = join(tmpDir, ".env.quick");
+        const envQuickPath = join(tmpDir, ".quickenv/.env.quick");
         const envQuickContent = `
 [production]
 DB_URL=postgres://prod
 `;
+        await mkdir(join(tmpDir, ".quickenv"), { recursive: true });
         await writeFile(envQuickPath, envQuickContent);
 
         await performSwitch("production", tmpDir);
@@ -114,7 +117,7 @@ DB_URL=postgres://prod
         expect(await prodEnv.text()).toContain("DB_URL=postgres://prod");
 
         // Verify state
-        const stateFile = Bun.file(join(tmpDir, ".quickenv.state"));
+        const stateFile = Bun.file(join(tmpDir, ".quickenv/.quickenv.state"));
         expect(await stateFile.exists()).toBe(true);
         const state = await stateFile.json();
         expect(state.activePreset).toBe("production");

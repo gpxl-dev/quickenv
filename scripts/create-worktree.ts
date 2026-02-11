@@ -162,8 +162,8 @@ async function createWorktree(options: WorktreeOptions) {
   // Initialize quickenv in the new worktree
   p.log.step("Setting up quickenv...");
 
-  const statePath = join(worktreePath, ".quickenv.state");
-  const mainStatePath = join(mainWorktree, ".quickenv.state");
+  const statePath = join(worktreePath, ".quickenv/.quickenv.state");
+  const mainStatePath = join(mainWorktree, ".quickenv/.quickenv.state");
   const mainStateFile = Bun.file(mainStatePath);
 
   // Build the state for the new worktree - only envPath, no activePreset
@@ -174,11 +174,13 @@ async function createWorktree(options: WorktreeOptions) {
     try {
       const mainState = await mainStateFile.json();
       if (mainState.envPath) {
-        // Calculate relative path from new worktree to main's envPath
-        const envPath = mainState.envPath.startsWith("/")
-          ? mainState.envPath
-          : relative(worktreePath, join(mainWorktree, mainState.envPath));
-        newState.envPath = envPath;
+         // Calculate relative path from new worktree to main's envPath
+         // envPath is relative to repo root, so we need to go up one level from worktree
+         // and point to main worktree's .quickenv/.env.quick
+         const envPath = mainState.envPath.startsWith("/")
+           ? mainState.envPath
+           : join("..", basename(mainWorktree), mainState.envPath);
+         newState.envPath = envPath;
         p.log.success(`Linked to shared env file: ${envPath}`);
       }
     } catch {

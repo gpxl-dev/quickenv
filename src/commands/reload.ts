@@ -7,7 +7,7 @@ export const reloadCommand = new Command("reload")
     .description("Reloads the current preset without prompting")
     .action(async () => {
         const rootDir = process.cwd();
-        const statePath = join(rootDir, ".quickenv.state");
+        const statePath = join(rootDir, ".quickenv/.quickenv.state");
         const state = await loadState(statePath);
         
         if (!state.activePreset) {

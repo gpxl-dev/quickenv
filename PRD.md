@@ -4,7 +4,7 @@ quickenv is a bunx utility designed to manage environment variables across monor
 ---
 
 1. Overview
-Managing multiple .env files in different subdirectories is tedious. quickenv allows you to define all environment variables in a single tagged file (.env.quick) and synchronize them into the appropriate .env files (e.g., .env.local, .env.production) based on an active "preset".
+Managing multiple .env files in different subdirectories is tedious. quickenv allows you to define all environment variables in a single tagged file (`.quickenv/.env.quick`) and synchronize them into the appropriate .env files (e.g., .env.local, .env.production) based on an active "preset".
 
 ---
 
@@ -16,8 +16,8 @@ Located in the repository root. Defines the structure of the monorepo and securi
 - tui: UI configuration for switching presets.
 - contains no variables, designed to be possible to commit to git.
 
-2.2 .env.quick (The Source of Truth)
-Located in the repository root. This file uses an INI-like format with tags to define which variables apply to which presets and projects.
+2.2 .quickenv/.env.quick (The Source of Truth)
+Located in the `.quickenv/` directory. This file uses an INI-like format with tags to define which variables apply to which presets and projects.
 - Tags: 
   - `[preset1, preset2]` for global preset values.
   - `[project:preset]` for project-specific overrides.
@@ -31,9 +31,9 @@ Located in the repository root. This file uses an INI-like format with tags to d
   5. Last definition in the file (if specificity is equal).
 - Unset Values: KEY= (empty value) explicitly removes the variable from the target .env file during synchronization.
 
-2.3 .quickenv.state (Active State)
-A gitignored JSON file that tracks the current active preset (e.g., {"activePreset": "local"}).
-- **New:** Allows configuring a custom path to the `.env.quick` file (e.g., `{"envPath": "../shared/.env.quick"}`). This enables sharing a single environment file across multiple monorepo roots or related projects.
+2.3 .quickenv/.quickenv.state (Active State)
+A gitignored JSON file in the `.quickenv/` directory that tracks the current active preset (e.g., {"activePreset": "local"}).
+- **New:** Allows configuring a custom path to the `.quickenv/.env.quick` file (e.g., `{"envPath": "../shared/.quickenv/.env.quick"}`). This enables sharing a single environment file across multiple monorepo roots or related projects.
 
 ---
 
@@ -43,7 +43,7 @@ A gitignored JSON file that tracks the current active preset (e.g., {"activePres
 Guided setup to bootstrap quickenv in a repository.
 - Discovery: Scans for package.json workspaces or directories containing .env.example.
 - Git Safety: Crucial Rule: Only reads .env files if they are not gitignored (prioritizing .env.example).
-- Setup: Generates quickenv.yaml, creates .env.quick (pre-filled from examples), and ensures .quickenv.state is added to .gitignore.
+- Setup: Generates quickenv.yaml, creates `.quickenv/.env.quick` (pre-filled from examples), and ensures `.quickenv/` is added to .gitignore.
 3.2 list (alias show)
 Displays the effective environment variables for the current active preset.
 - Masking: 
@@ -54,19 +54,19 @@ Displays the effective environment variables for the current active preset.
 3.3 switch [preset]
 Synchronizes the monorepo to a specific preset.
 - Process:
-  1. Identifies all variables in .env.quick matching the preset (applying precedence rules).
+  1. Identifies all variables in `.quickenv/.env.quick` matching the preset (applying precedence rules).
   2. For each project, writes the resolved variables to the designated file (e.g., apps/web/.env.local).
-  3. Updates .quickenv.state.
+  3. Updates `.quickenv/.quickenv.state`.
 - TUI: If no preset is provided, displays an interactive list. Hovering over a preset shows a preview of key variables (respecting masking).
 3.4 set [key] [value]
 Updates a variable across projects/presets.
-- Persistence: Use --persist to update the value in .env.quick.
+- Persistence: Use --persist to update the value in `.quickenv/.env.quick`.
 - Logic: Can update specific tags or create new ones.
 - TUI: Guided flow to choose variable, projects, and target presets.
 3.5 reset
-Reverts local project .env files to match exactly what is defined in the current .env.quick preset. Useful if manual edits were made to local .env files.
+Reverts local project .env files to match exactly what is defined in the current `.quickenv/.env.quick` preset. Useful if manual edits were made to local .env files.
 3.6 edit
-Opens the .env.quick file in the default editor (respects $VISUAL and $EDITOR).
+Opens the `.quickenv/.env.quick` file in the default editor (respects $VISUAL and $EDITOR).
 ---
 
 4. Security & Privacy
@@ -84,10 +84,10 @@ Opens the .env.quick file in the default editor (respects $VISUAL and $EDITOR).
   - yaml (Config parsing)
   - zod (Validation)
   - ignore (Gitignore handling)
-- Parser: A custom line-based parser for .env.quick to eventually support comment preservation and precise updates.
+- Parser: A custom line-based parser for `.quickenv/.env.quick` to eventually support comment preservation and precise updates.
 ---
 
-6. Example .env.quick Structure
+6. Example .quickenv/.env.quick Structure
 # Shared by local and preview presets
 [local, preview]
 NODE_ENV=development

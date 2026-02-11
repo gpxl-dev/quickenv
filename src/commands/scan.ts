@@ -152,7 +152,7 @@ export async function performScan(rootDir: string, options: { yes?: boolean } = 
     }
 
     // 2. Update .env.quick
-    const quickPath = await resolveEnvQuickPath(join(rootDir, ".quickenv.state"));
+    const quickPath = await resolveEnvQuickPath(join(rootDir, ".quickenv/.quickenv.state"));
     const quickFile = Bun.file(quickPath);
     let quickContent = "";
     let sections: QuickEnvSection[] = [];

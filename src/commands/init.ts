@@ -2,6 +2,7 @@ import { Command } from "commander";
 import * as p from "@clack/prompts";
 import ignore from "ignore";
 import { join, dirname } from "path";
+import { $ } from "bun";
 import { resolveEnvQuickPath } from "../core/config";
 
 export const initCommand = new Command("init")
@@ -94,7 +95,8 @@ variables:
             p.log.info("quickenv.yaml already exists. Skipping.");
         }
         
-        // 4. Generate .env.quick
+        // 4. Create .quickenv directory and .env.quick
+        await $`mkdir -p .quickenv`;
         const envPath = await resolveEnvQuickPath();
         if (!(await Bun.file(envPath).exists())) {
             let initialEnvContent = `# Shared variables
@@ -112,8 +114,6 @@ DEBUG=true
 # APP_TITLE=My Web App
 `;
             // Try to pre-fill from an example if available
-            // Just picking the first found example for demo purposes
-            // Or maybe searching for root .env.example
             const rootExample = Bun.file(".env.example");
             if (await rootExample.exists()) {
                 const content = await rootExample.text();
@@ -125,12 +125,12 @@ DEBUG=true
         } else {
             p.log.info(`${envPath} already exists. Skipping.`);
         }
-        
+
         // 5. Update .gitignore
         const gitignore = Bun.file(".gitignore");
         let content = "";
         const exists = await gitignore.exists();
-        
+
         if (exists) {
             content = await gitignore.text();
         }
@@ -138,19 +138,11 @@ DEBUG=true
         const ig = ignore().add(content);
         let updated = false;
 
-        if (!ig.ignores(".quickenv.state")) {
+        if (!ig.ignores(".quickenv")) {
             if (content.length > 0 && !content.endsWith("\n")) content += "\n";
-            content += "# quickenv state\n.quickenv.state\n";
+            content += "# quickenv\n.quickenv\n";
             updated = true;
-            p.log.success("Added .quickenv.state to .gitignore");
-            ig.add(".quickenv.state");
-        }
-
-        if (!ig.ignores(envPath)) {
-            if (content.length > 0 && !content.endsWith("\n")) content += "\n";
-            content += `# quickenv secrets\n${envPath}\n`;
-            updated = true;
-            p.log.success(`Added ${envPath} to .gitignore`);
+            p.log.success("Added .quickenv to .gitignore");
         }
 
         if (updated) {

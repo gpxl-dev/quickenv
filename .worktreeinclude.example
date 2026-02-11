@@ -2,8 +2,8 @@
 # Files and directories to copy when creating a new git worktree
 # Uses glob patterns (similar to .gitignore syntax)
 
-# Shared environment file (will be linked via envPath in .quickenv.state)
-.env.quick
+# Shared environment file (will be linked via envPath in .quickenv/.quickenv.state)
+.quickenv/.env.quick
 
 # Additional shared files you might want:
 # .envrc
