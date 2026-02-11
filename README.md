@@ -108,7 +108,7 @@ DEBUG=  # Empty value removes this var in production
 | `reset` | Revert local .env files to match .quickenv/.env.quick |
 | `edit` | Open .quickenv/.env.quick in $EDITOR |
 | `reload` | Re-sync without changing preset |
-| `worktree [branch]` | Create new git worktree with quickenv support |
+| `worktree [branch]` | Create new git worktree with quickenv support (supports hooks) |
 
 ### Examples
 
@@ -201,6 +201,52 @@ feature-worktree/
 ```
 
 This allows each worktree to have its own active preset while sharing the same environment definitions.
+
+### Post-Worktree Hooks
+
+You can run custom scripts after a worktree is created by placing a hook file in `.quickenv/hooks/post-worktree.{ts,sh}`. The hook runs from the newly created worktree directory with the following environment variables:
+
+- `WORKTREE_PATH` - Absolute path to the new worktree
+- `BRANCH_NAME` - Name of the branch for the worktree
+
+**Supported formats:**
+- `.ts` - TypeScript (runs with Bun)
+- `.sh` - Shell script
+
+**Priority:** If both `.ts` and `.sh` exist, the `.ts` hook is preferred.
+
+**Example:**
+
+```bash
+# Create the hooks directory
+mkdir -p .quickenv/hooks
+
+# Create a TypeScript hook
+cat > .quickenv/hooks/post-worktree.ts << 'EOF'
+// Run npm install in the new worktree
+import { $ } from "bun";
+
+const worktreePath = process.env.WORKTREE_PATH;
+console.log(`Setting up worktree at ${worktreePath}`);
+
+await $`cd ${worktreePath} && npm install`.quiet();
+console.log("Dependencies installed!");
+EOF
+
+# Or create a shell hook
+cat > .quickenv/hooks/post-worktree.sh << 'EOF'
+#!/bin/sh
+echo "Setting up worktree at $WORKTREE_PATH"
+cd "$WORKTREE_PATH" && npm install
+echo "Done!"
+EOF
+chmod +x .quickenv/hooks/post-worktree.sh
+```
+
+**Notes:**
+- Hooks are per-developer (`.quickenv/` is gitignored)
+- If a hook fails (non-zero exit), a warning is shown but worktree creation continues
+- Hook output is piped to the terminal
 
 ## Security
 

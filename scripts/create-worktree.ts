@@ -79,6 +79,78 @@ async function copyWorktreeIncludeFiles(
   return copied;
 }
 
+async function runPostWorktreeHook(
+  mainWorktree: string,
+  worktreePath: string,
+  branch: string
+): Promise<void> {
+  const hooksDir = join(mainWorktree, ".quickenv/hooks");
+  const tsHook = join(hooksDir, "post-worktree.ts");
+  const shHook = join(hooksDir, "post-worktree.sh");
+
+  let hookPath: string | null = null;
+  let hookType: "ts" | "sh" | null = null;
+
+  // Check for .ts hook first, then .sh
+  const tsFile = Bun.file(tsHook);
+  if (await tsFile.exists()) {
+    hookPath = tsHook;
+    hookType = "ts";
+  } else {
+    const shFile = Bun.file(shHook);
+    if (await shFile.exists()) {
+      hookPath = shHook;
+      hookType = "sh";
+    }
+  }
+
+  if (!hookPath || !hookType) {
+    return;
+  }
+
+  p.log.step("Running post-worktree hook...");
+
+  try {
+    const env = {
+      ...process.env,
+      WORKTREE_PATH: worktreePath,
+      BRANCH_NAME: branch,
+    };
+
+    if (hookType === "ts") {
+      // Run TypeScript hook with bun from the new worktree directory
+      const proc = Bun.spawn(["bun", hookPath], {
+        cwd: worktreePath,
+        env,
+        stdout: "inherit",
+        stderr: "inherit",
+      });
+      const exitCode = await proc.exited;
+      if (exitCode !== 0) {
+        p.log.warn(`Post-worktree hook exited with code ${exitCode}`);
+      } else {
+        p.log.success("Post-worktree hook completed");
+      }
+    } else {
+      // Run shell hook
+      const proc = Bun.spawn(["sh", hookPath], {
+        cwd: worktreePath,
+        env,
+        stdout: "inherit",
+        stderr: "inherit",
+      });
+      const exitCode = await proc.exited;
+      if (exitCode !== 0) {
+        p.log.warn(`Post-worktree hook exited with code ${exitCode}`);
+      } else {
+        p.log.success("Post-worktree hook completed");
+      }
+    }
+  } catch (error) {
+    p.log.warn(`Failed to run post-worktree hook: ${error}`);
+  }
+}
+
 async function createWorktree(options: WorktreeOptions) {
   p.intro("quickenv worktree");
 
@@ -191,6 +263,9 @@ async function createWorktree(options: WorktreeOptions) {
   // Create the state file (may be empty if no envPath found)
   await Bun.write(statePath, JSON.stringify(newState, null, 2));
   p.log.success("Created .quickenv.state");
+
+  // Run post-worktree hook if it exists
+  await runPostWorktreeHook(mainWorktree, worktreePath, branch);
 
   // Summary
   p.outro("Worktree created successfully!");

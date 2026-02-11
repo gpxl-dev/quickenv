@@ -1,0 +1,6 @@
+
+defaultTarget: .env.development
+projects:
+  - apps/web
+  - path: apps/api
+    target: .env.custom
