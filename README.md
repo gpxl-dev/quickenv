@@ -21,6 +21,10 @@ bunx quickenv
 bun install -g quickenv
 ```
 
+This provides two commands:
+- `quickenv` - Main CLI for managing environments
+- `quickenv-worktree` - Helper for creating git worktrees with quickenv support
+
 ## Quick Start
 
 ```bash
@@ -38,6 +42,9 @@ bunx quickenv switch production
 
 # Edit the source file directly
 bunx quickenv edit
+
+# Create a new worktree with quickenv support
+quickenv-worktree feature/my-branch
 ```
 
 ## How It Works
@@ -100,6 +107,7 @@ DEBUG=  # Empty value removes this var in production
 | `reset` | Revert local .env files to match .env.quick |
 | `edit` | Open .env.quick in $EDITOR |
 | `reload` | Re-sync without changing preset |
+| `worktree [branch]` | Create new git worktree with quickenv support |
 
 ### Examples
 
@@ -118,6 +126,12 @@ bunx quickenv set DATABASE_URL
 
 # Reset all .env files to match current preset
 bunx quickenv reset
+
+# Create a new worktree with quickenv support
+quickenv-worktree feature/my-branch
+
+# Create worktree at custom path
+quickenv-worktree feature/my-branch --path ../my-project-feature
 ```
 
 ## Configuration (quickenv.yaml)
@@ -145,6 +159,45 @@ tui:
     - name: production
       description: Production environment
 ```
+
+## Worktree Support
+
+quickenv works seamlessly with git worktrees. When you create a new worktree, you can automatically copy shared configuration files and set up quickenv.
+
+### Setting Up Worktrees
+
+1. Create a `.worktreeinclude` file in your main worktree:
+```
+# Files to copy when creating new worktrees
+.env.quick
+```
+
+2. Create a new worktree with quickenv support:
+```bash
+# Create worktree for new feature branch
+quickenv-worktree feature/my-branch
+```
+
+This will:
+- Create a new git worktree for the branch
+- Copy files listed in `.worktreeinclude`
+- Initialize `.quickenv.state` with `envPath` pointing to the main worktree's `.env.quick`
+
+### Worktree Configuration
+
+Each worktree has its own `.quickenv.state` (tracking active preset) with `envPath` pointing to the shared `.env.quick`:
+
+```
+main-worktree/
+├── .quickenv.state     # activePreset: production
+└── .env.quick          # Shared secrets
+
+feature-worktree/
+├── .quickenv.state     # activePreset: local, envPath: ../main-worktree/.env.quick
+└── .quickenv.state     # activePreset: local (worktree-specific)
+```
+
+This allows each worktree to have its own active preset while sharing the same environment definitions.
 
 ## Security
 
