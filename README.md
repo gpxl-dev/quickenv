@@ -202,6 +202,23 @@ feature-worktree/
 
 This allows each worktree to have its own active preset while sharing the same environment definitions.
 
+### Multiple Environment Files (envPath Array)
+
+`envPath` can also accept an array of paths, with later files taking precedence over earlier ones. This is useful for inheriting from a shared config while overriding specific variables:
+
+```json
+{
+  "envPath": ["../shared/.quickenv/.env.quick", ".quickenv/.env.quick"]
+}
+```
+
+In this example:
+- Variables from `../shared/.quickenv/.env.quick` are loaded first
+- Variables from `.quickenv/.env.quick` are loaded second and override any duplicates
+- This allows you to share common configuration while keeping local overrides
+
+This pattern is useful for monorepos where you want a shared base configuration with project-specific overrides.
+
 ### Post-Worktree Hooks
 
 You can run custom scripts after a worktree is created by placing a hook file in `.quickenv/hooks/post-worktree.{ts,sh}`. The hook runs from the newly created worktree directory with the following environment variables:

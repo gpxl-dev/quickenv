@@ -51,15 +51,26 @@ ${bold("FILES")}
          By default, ${bold("quickenv")} writes to ${bold(".env")}. Use ${underline("target")} 
          to change this per project, or ${underline("defaultTarget")} for all.
 
-      ${bold(".quickenv/.env.quick")}
-          The source of truth for all environment variables. It supports
-          grouping variables using tags. Located in the .quickenv directory.
-          The path can be customized via envPath in ${bold(".quickenv/.quickenv.state")}.
+       ${bold(".quickenv/.env.quick")}
+           The source of truth for all environment variables. It supports
+           grouping variables using tags. Located in the .quickenv directory.
+           The path can be customized via envPath in ${bold(".quickenv/.quickenv.state")}.
 
-          ${underline("Tagging System:")}
-          Tags are defined in square brackets. Variables following a tag 
-          belong to that environment/scope. Wildcards (${bold("*")}) can be used 
-          to match all presets or all projects.
+           ${underline("envPath (Single File):")}
+           Point to a single shared environment file:
+           ${green("{\"envPath\": \"../shared/.quickenv/.env.quick\"}")}
+
+           ${underline("envPath (Multiple Files - Array):")}
+           Load multiple files with later files taking precedence:
+           ${green("{\"envPath\": [\"../shared/.env.quick\", \".quickenv/.env.quick\"]}")}
+           
+           Variables in the second file override those in the first,
+           allowing you to share common config while keeping local overrides.
+
+           ${underline("Tagging System:")}
+           Tags are defined in square brackets. Variables following a tag 
+           belong to that environment/scope. Wildcards (${bold("*")}) can be used 
+           to match all presets or all projects.
 
           ${green("# Global variables (shared across all environments)")}
           ${green("NODE_ENV=development")}
