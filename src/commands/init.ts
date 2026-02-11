@@ -97,7 +97,8 @@ variables:
         
         // 4. Create .quickenv directory and .env.quick
         await $`mkdir -p .quickenv`;
-        const envPath = await resolveEnvQuickPath();
+        const envResult = await resolveEnvQuickPath();
+        const envPath = envResult.path;
         if (!(await Bun.file(envPath).exists())) {
             let initialEnvContent = `# Shared variables
 # NODE_ENV=development

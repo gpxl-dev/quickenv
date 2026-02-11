@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { loadConfig, loadState, resolveEnvQuickPath } from "../core/config";
+import { loadConfig, loadState, resolveEnvQuickPath, loadMergedEnvQuick } from "../core/config";
 import { parseEnvQuick } from "../core/parser";
 import { resolveEnv } from "../core/resolver";
 import { maskValue } from "../core/masking";
@@ -19,13 +19,19 @@ export const listCommand = new Command("list")
       process.exit(1);
     }
     
-    const envPath = await resolveEnvQuickPath();
-    const envFile = Bun.file(envPath);
+    const envResult = await resolveEnvQuickPath();
+    const envFile = Bun.file(envResult.path);
     if (!(await envFile.exists())) {
-      console.error(`${envPath} not found. Run 'quickenv init'.`);
+      if (envResult.isCustom) {
+        console.error(`${envResult.path} not found (custom path from .quickenv.state). Run 'quickenv init'.`);
+      } else if (envResult.fallbackFrom) {
+        console.error(`${envResult.fallbackFrom} not found (custom path from .quickenv.state), and default location ${envResult.path} not found. Run 'quickenv init'.`);
+      } else {
+        console.error(`${envResult.path} not found. Run 'quickenv init'.`);
+      }
       process.exit(1);
     }
-    const content = await envFile.text();
+    const content = await loadMergedEnvQuick(envResult);
     const sections = parseEnvQuick(content);
     
     const variables = resolveEnv(sections, preset);

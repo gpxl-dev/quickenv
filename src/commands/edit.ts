@@ -5,11 +5,18 @@ import { spawn } from "child_process";
 export const editCommand = new Command("edit")
   .description("Opens the .env.quick file in your default editor")
   .action(async () => {
-    const envPath = await resolveEnvQuickPath();
+    const envResult = await resolveEnvQuickPath();
+    const envPath = envResult.path;
     const envFile = Bun.file(envPath);
     
     if (!(await envFile.exists())) {
-      console.error(`${envPath} not found. Run 'quickenv init'.`);
+      if (envResult.isCustom) {
+        console.error(`${envPath} not found (custom path from .quickenv.state). Run 'quickenv init'.`);
+      } else if (envResult.fallbackFrom) {
+        console.error(`${envResult.fallbackFrom} not found (custom path from .quickenv.state), and default location ${envPath} not found. Run 'quickenv init'.`);
+      } else {
+        console.error(`${envPath} not found. Run 'quickenv init'.`);
+      }
       process.exit(1);
     }
 

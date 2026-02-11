@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { loadConfig, loadState, resolveEnvQuickPath } from "../core/config";
+import { loadConfig, loadState, resolveEnvQuickPath, loadMergedEnvQuick } from "../core/config";
 import { performSwitch } from "./switch";
 import { parseEnvQuick, type QuickEnvSection } from "../core/parser";
 import { resolveEnv } from "../core/resolver";
@@ -30,10 +30,11 @@ export const setCommand = new Command("set")
       const val = value === undefined ? "" : value;
 
       if (options.persist) {
-          // Append to .env.quick
+          // Append to .env.quick (last file in array has highest precedence)
           
           let content = "";
-          const envPath = await resolveEnvQuickPath();
+          const envResult = await resolveEnvQuickPath();
+          const envPath = envResult.path; // Last path in array (highest precedence)
           const file = Bun.file(envPath);
           if (await file.exists()) {
               content = await file.text();
@@ -50,11 +51,10 @@ export const setCommand = new Command("set")
           // Ephemeral update
           console.log("Applying temporary update...");
           
-          const envPath = await resolveEnvQuickPath();
-          const envFile = Bun.file(envPath);
+          const envResult = await resolveEnvQuickPath();
           let sections: QuickEnvSection[] = [];
-          if (await envFile.exists()) {
-              const content = await envFile.text();
+          if (envResult.paths.length > 0 && await Bun.file(envResult.paths[0]!).exists()) {
+              const content = await loadMergedEnvQuick(envResult);
               sections = parseEnvQuick(content);
           }
           

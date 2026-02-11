@@ -70,3 +70,24 @@ export function parseEnvQuick(content: string): QuickEnvSection[] {
 
   return sections;
 }
+
+export function serializeEnvQuick(sections: QuickEnvSection[]): string {
+  const lines: string[] = [];
+  
+  for (const section of sections) {
+    // Add tag header if there are tags
+    if (section.tags.length > 0) {
+      lines.push(`[${section.tags.join(', ')}]`);
+    }
+    
+    // Add variables
+    for (const [key, value] of Object.entries(section.variables)) {
+      lines.push(`${key}=${value}`);
+    }
+    
+    // Add blank line between sections
+    lines.push('');
+  }
+  
+  return lines.join('\n');
+}

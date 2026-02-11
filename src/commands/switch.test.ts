@@ -123,4 +123,144 @@ DB_URL=postgres://prod
         expect(state.activePreset).toBe("production");
         expect(state.isProtected).toBe(false); // In this test, protected was not true in config
     });
+
+    it("should merge multiple env files with later files taking precedence", async () => {
+        const projectPath = join(tmpDir, "apps/merged-app");
+        const sharedDir = join(tmpDir, "shared");
+        await mkdir(projectPath, { recursive: true });
+        await mkdir(sharedDir, { recursive: true });
+        
+        const configPath = join(tmpDir, "quickenv.yaml");
+        const configContent = `
+projects:
+  - apps/merged-app
+`;
+        await writeFile(configPath, configContent);
+
+        // Create shared env file
+        const sharedEnvPath = join(sharedDir, ".env.quick");
+        const sharedEnvContent = `
+[local]
+SHARED_VAR=from_shared
+OVERRIDE_VAR=original_value
+API_KEY=shared_key
+`;
+        await writeFile(sharedEnvPath, sharedEnvContent);
+
+        // Create local env file that overrides some values
+        const localEnvPath = join(tmpDir, ".quickenv/.env.quick");
+        const localEnvContent = `
+[local]
+OVERRIDE_VAR=overridden_value
+LOCAL_VAR=only_local
+`;
+        await mkdir(join(tmpDir, ".quickenv"), { recursive: true });
+        await writeFile(localEnvPath, localEnvContent);
+
+        // Create state file with array envPath
+        // State is at .quickenv/.quickenv.state, so paths are relative to tmpDir (repo root)
+        const statePath = join(tmpDir, ".quickenv/.quickenv.state");
+        const stateContent = JSON.stringify({
+            envPath: ["shared/.env.quick", ".quickenv/.env.quick"]
+        });
+        await writeFile(statePath, stateContent);
+
+        await performSwitch("local", tmpDir);
+
+        // Verify merged result
+        const envFile = Bun.file(join(projectPath, ".env"));
+        expect(await envFile.exists()).toBe(true);
+        const envContent = await envFile.text();
+        
+        // Variables from shared file should be present
+        expect(envContent).toContain("SHARED_VAR=from_shared");
+        expect(envContent).toContain("API_KEY=shared_key");
+        
+        // Local override should take precedence
+        expect(envContent).toContain("OVERRIDE_VAR=overridden_value");
+        expect(envContent).not.toContain("OVERRIDE_VAR=original_value");
+        
+        // Local-only variables should be present
+        expect(envContent).toContain("LOCAL_VAR=only_local");
+    });
+
+    it("should handle single envPath as string (backward compatibility)", async () => {
+        const projectPath = join(tmpDir, "apps/single-app");
+        await mkdir(projectPath, { recursive: true });
+        
+        const configPath = join(tmpDir, "quickenv.yaml");
+        const configContent = `
+projects:
+  - apps/single-app
+`;
+        await writeFile(configPath, configContent);
+
+        const envQuickPath = join(tmpDir, ".quickenv/.env.quick");
+        const envQuickContent = `
+[local]
+SINGLE_VAR=value
+`;
+        await mkdir(join(tmpDir, ".quickenv"), { recursive: true });
+        await writeFile(envQuickPath, envQuickContent);
+
+        // Create state file with string envPath
+        const statePath = join(tmpDir, ".quickenv/.quickenv.state");
+        const stateContent = JSON.stringify({
+            envPath: ".quickenv/.env.quick"
+        });
+        await writeFile(statePath, stateContent);
+
+        await performSwitch("local", tmpDir);
+
+        const envFile = Bun.file(join(projectPath, ".env"));
+        expect(await envFile.exists()).toBe(true);
+        expect(await envFile.text()).toContain("SINGLE_VAR=value");
+    });
+
+    it("should handle absolute paths in envPath array", async () => {
+        const projectPath = join(tmpDir, "apps/abs-app");
+        const sharedDir = join(tmpDir, "shared-abs");
+        await mkdir(projectPath, { recursive: true });
+        await mkdir(sharedDir, { recursive: true });
+        
+        const configPath = join(tmpDir, "quickenv.yaml");
+        const configContent = `
+projects:
+  - apps/abs-app
+`;
+        await writeFile(configPath, configContent);
+
+        // Create shared env file with absolute path
+        const sharedEnvPath = join(sharedDir, ".env.quick");
+        const sharedEnvContent = `
+[local]
+ABS_SHARED=from_abs_shared
+`;
+        await writeFile(sharedEnvPath, sharedEnvContent);
+
+        // Create local env file
+        const localEnvPath = join(tmpDir, ".quickenv/.env.quick");
+        const localEnvContent = `
+[local]
+ABS_LOCAL=from_abs_local
+`;
+        await mkdir(join(tmpDir, ".quickenv"), { recursive: true });
+        await writeFile(localEnvPath, localEnvContent);
+
+        // Create state file with absolute path in array
+        const statePath = join(tmpDir, ".quickenv/.quickenv.state");
+        const stateContent = JSON.stringify({
+            envPath: [sharedEnvPath, ".quickenv/.env.quick"]
+        });
+        await writeFile(statePath, stateContent);
+
+        await performSwitch("local", tmpDir);
+
+        const envFile = Bun.file(join(projectPath, ".env"));
+        expect(await envFile.exists()).toBe(true);
+        const envContent = await envFile.text();
+        
+        expect(envContent).toContain("ABS_SHARED=from_abs_shared");
+        expect(envContent).toContain("ABS_LOCAL=from_abs_local");
+    });
 });
