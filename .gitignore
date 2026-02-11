@@ -37,3 +37,4 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .quickenv.state
 # quickenv secrets
 .env.quick
+.todos/

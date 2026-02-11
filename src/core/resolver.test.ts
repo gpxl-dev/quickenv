@@ -180,7 +180,7 @@ DEBUG=false
     expect(resultApi.DEBUG).toBe("true");
   });
 
-  it("prioritizes preset tags over project wildcard tags", () => {
+  it("prioritizes project wildcard tags over preset tags", () => {
     const input = `
 [production]
 VAR=preset-important
@@ -191,9 +191,17 @@ VAR=project-default
     const sections = parseEnvQuick(input);
     const result = resolveEnv(sections, "production", "web");
     
-    // If the user says [web:*] is lower specificity than :production, 
-    // then it should probably be 'preset-important'.
-    // Currently my code returns 'project-default' because Layer 3 > Layer 2.
-    expect(result.VAR).toBe("preset-important");
+    expect(result.VAR).toBe("project-default");
+  });
+
+  it("supports UNSET value to remove a variable", () => {
+    const input = `
+VAR=exist
+[local]
+VAR=UNSET
+`;
+    const sections = parseEnvQuick(input);
+    const result = resolveEnv(sections, "local", "web");
+    expect(result).toEqual({});
   });
 });

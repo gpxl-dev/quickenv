@@ -104,6 +104,7 @@ ${bold("COMMANDS")}
      ${bold("scan")}       Scan for .env.example files to discover projects.
      ${bold("list")}       List all projects and their current environment status.
      ${bold("switch")}     Interactively switch between environments (tags).
+     ${bold("reload")}     Reloads the current preset without prompting.
      ${bold("set")}        Set a variable in .env.quick and sync it.
      ${bold("edit")}       Open the .env.quick file in your default editor.
      ${bold("reset")}      Remove all managed .env files.

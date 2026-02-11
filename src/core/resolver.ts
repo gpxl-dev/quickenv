@@ -9,7 +9,7 @@ export function resolveEnv(
 
   const applyVariables = (variables: Record<string, string>) => {
     for (const [key, value] of Object.entries(variables)) {
-      if (value === "") {
+      if (value === "" || value === "UNSET") {
         delete result[key];
       } else {
         result[key] = value;
@@ -24,10 +24,10 @@ export function resolveEnv(
     }
   }
 
-  // Layer 2: Project Specific (All presets)
+  // Layer 2: Project Specific (Full match only)
   if (project) {
     for (const section of sections) {
-      if (section.tags.includes(project) || section.tags.includes(`${project}:*`)) {
+      if (section.tags.includes(project)) {
         applyVariables(section.variables);
       }
     }
@@ -40,14 +40,27 @@ export function resolveEnv(
     }
   }
 
-  // Layer 4: Project Specific (Specific preset)
+  // Layer 4: Wildcard combinations
   for (const section of sections) {
     for (const tag of section.tags) {
       if (project) {
-        if (tag === `${project}:${preset}` || tag === `*:${preset}`) {
+        if (tag === `*:${preset}` || tag === `${project}:*`) {
           applyVariables(section.variables);
         }
-      } else if (tag.endsWith(`:${preset}`)) {
+      } else if (tag === `*:${preset}`) {
+        applyVariables(section.variables);
+      }
+    }
+  }
+
+  // Layer 5: Specific combinations
+  for (const section of sections) {
+    for (const tag of section.tags) {
+      if (project) {
+        if (tag === `${project}:${preset}`) {
+          applyVariables(section.variables);
+        }
+      } else if (tag.endsWith(`:${preset}`) && tag !== `*:${preset}`) {
         applyVariables(section.variables);
       }
     }
