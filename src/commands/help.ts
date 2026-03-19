@@ -113,11 +113,14 @@ ${bold("FILES")}
       ${bold("COMMANDS")}
       ${bold("init")}       Guided setup to bootstrap quickenv in a repository.
       ${bold("scan")}       Scan for .env.example files to discover projects.
-      ${bold("list")}       List all projects and their current environment status.
+      ${bold("status")}     Show active preset, source files, projects, and available presets.
+      ${bold("list")}       Display effective variables for the active preset. Optionally
+                 filter by app/project (path or name); prompts if omitted.
       ${bold("switch")}     Interactively switch between environments (tags).
       ${bold("reload")}     Reloads the current preset without prompting.
       ${bold("set")}        Set a variable in .env.quick and sync it.
-      ${bold("edit")}       Open the .env.quick file in your default editor.
+      ${bold("edit")}       Open a .env.quick file in your default editor. Prompts to
+                 select which file when multiple source files are configured.
       ${bold("reset")}      Remove all managed .env files.
       ${bold("worktree")}   Create a new git worktree with quickenv support (see HOOKS below).
 

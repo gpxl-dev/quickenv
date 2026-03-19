@@ -102,11 +102,12 @@ DEBUG=  # Empty value removes this var in production
 |---------|-------------|
 | `init` | Initialize quickenv with guided setup |
 | `scan` | Discover and import existing .env files |
-| `list` (or `show`) | Display effective variables for active preset |
+| `status` | Show active preset, source files, projects, and available presets |
+| `list [app]` (or `show`) | Display effective variables for active preset; optionally filter by app/project (prompts if omitted) |
 | `switch [preset]` | Sync all projects to a preset (interactive TUI if no preset) |
 | `set [key] [value]` | Update variables across presets |
 | `reset` | Revert local .env files to match .quickenv/.env.quick |
-| `edit` | Open .quickenv/.env.quick in $EDITOR |
+| `edit` | Open a .env.quick file in $EDITOR; prompts to select which file when multiple are configured |
 | `reload` | Re-sync without changing preset |
 | `worktree [branch]` | Create new git worktree with quickenv support (supports hooks) |
 
