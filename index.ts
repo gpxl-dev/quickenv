@@ -10,6 +10,7 @@ import { resetCommand } from "./src/commands/reset";
 import { scanCommand } from "./src/commands/scan";
 import { editCommand } from "./src/commands/edit";
 import { helpCommand } from "./src/commands/help";
+import { statusCommand } from "./src/commands/status";
 import { worktreeCommand } from "./scripts/create-worktree";
 
 const program = new Command();
@@ -27,6 +28,7 @@ program.addCommand(reloadCommand);
 program.addCommand(setCommand);
 program.addCommand(editCommand);
 program.addCommand(resetCommand);
+program.addCommand(statusCommand);
 program.addCommand(helpCommand);
 program.addCommand(worktreeCommand);
 
