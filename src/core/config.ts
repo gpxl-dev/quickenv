@@ -3,7 +3,7 @@ import YAML from "yaml";
 import { join, isAbsolute, dirname } from "path";
 import { parseEnvQuick, type QuickEnvSection, serializeEnvQuick } from "./parser";
 
-export const ConfigSchema = z.object({
+const ConfigSchema = z.object({
   projects: z.array(z.union([
     z.string(),
     z.object({
@@ -26,17 +26,17 @@ export const ConfigSchema = z.object({
 
 export type Config = z.infer<typeof ConfigSchema>;
 
-export const StateSchema = z.object({
+const StateSchema = z.object({
   activePreset: z.string().optional(),
   envPath: z.union([z.string(), z.array(z.string())]).optional(),
   isProtected: z.boolean().optional()
 });
 
-export type State = z.infer<typeof StateSchema>;
+type State = z.infer<typeof StateSchema>;
 
 const DEFAULT_STATE_PATH = ".quickenv/.quickenv.state";
 
-export interface EnvPathResult {
+interface EnvPathResult {
   path: string;
   paths: string[];  // All resolved paths (for array support)
   isCustom: boolean;

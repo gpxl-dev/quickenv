@@ -8,6 +8,9 @@
     "quickenv-worktree": "./scripts/create-worktree.ts"
   },
   "private": true,
+  "scripts": {
+    "test": "bun test"
+  },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/picomatch": "^4.0.2"
