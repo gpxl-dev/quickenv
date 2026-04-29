@@ -51,6 +51,23 @@ ${bold("FILES")}
          By default, ${bold("quickenv")} writes to ${bold(".env")}. Use ${underline("target")} 
          to change this per project, or ${underline("defaultTarget")} for all.
 
+         ${underline("The presets section:")}
+         Presets can also specify a ${underline("target")} filename. A preset target
+         overrides both project-level ${underline("target")} and ${underline("defaultTarget")}.
+
+         ${green("presets:")}
+         ${green("  production:")}
+         ${green("    target: .env.production")}
+         ${green("  preview:")}
+         ${green("    target: .env.preview")}
+         ${green("    protected: true")}
+
+         ${underline("Target precedence:")}
+         1. ${bold("presets.<preset>.target")} - Highest
+         2. ${bold("projects[].target")}
+         3. ${bold("defaultTarget")}
+         4. ${bold(".env")} - Default fallback
+
        ${bold(".quickenv/.env.quick")}
            The source of truth for all environment variables. It supports
            grouping variables using tags. Located in the .quickenv directory.
