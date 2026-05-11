@@ -1,161 +1,95 @@
 import { Command } from "commander";
-import * as p from "@clack/prompts";
 import pc from "picocolors";
 
 export const helpCommand = new Command("man")
-    .description("Display detailed documentation in a manpage-like format")
-    .action(() => {
-        const bold = (txt: string) => pc.bold(txt);
-        const underline = (txt: string) => pc.underline(txt);
-        const blue = (txt: string) => pc.blue(txt);
-        const green = (txt: string) => pc.green(txt);
+  .description("Display concise quickenv documentation")
+  .action(() => {
+    const b = pc.bold;
+    const c = pc.cyan;
 
-        console.log(`
-${bold("NAME")}
-     ${bold("quickenv")} -- manage environment variables across monorepos
+    console.log(`
+${b("quickenv")}
+  Manage monorepo .env files from one tagged source file.
 
-${bold("SYNOPSIS")}
-     ${bold("quickenv")} [${underline("command")}] [${underline("options")}]
+${b("Quick start")}
+  quickenv init          create quickenv.yaml and .quickenv/.env.quick
+  quickenv scan          import existing .env* files
+  quickenv switch local  write generated env files
+  quickenv status        inspect active preset, sources, projects
+  quickenv list          inspect resolved variables
 
-${bold("DESCRIPTION")}
-     ${bold("quickenv")} simplifies the management of .env files in monorepos by centralizing 
-     configuration in a single ${blue(".env.quick")} file and distributing them to 
-     relevant project directories.
+${b("Files")}
+  ${c("quickenv.yaml")}             committable project/preset metadata
+  ${c(".quickenv/.env.quick")}      secret source file; gitignored
+  ${c(".quickenv/.quickenv.state")} active preset/envPath state; gitignored
 
-${bold("FILES")}
-     ${bold("quickenv.yaml")}
-         The main configuration file. It defines where environment variables 
-         should be synced and how they should be handled.
+${b(".env.quick format")}
+  Global values are untagged. Sections may target presets, projects, or both.
 
-         ${underline("The variables section:")}
-         Used to define metadata for specific environment variables.
-         
-         ${green("variables:")}
-         ${green("  SECRET_KEY:")}
-         ${green("    sensitive: true")}
+  NODE_ENV=development
 
-         Setting ${underline("sensitive: true")} ensures that the variable's value is 
-         masked or handled securely (e.g., during logs or display).
+  [local]
+  API_URL=http://localhost:3000
 
-         ${underline("The projects section:")}
-         Defines which directories should receive environment variables.
-         Each project can specify a custom ${underline("target")} filename.
+  [apps/api:local]
+  DATABASE_URL=postgres://localhost:5432/api
 
-         ${green("projects:")}
-         ${green("  - path: apps/web")}
-         ${green("    target: .env.local  # Custom target file")}
-         ${green("  - apps/api             # Defaults to .env")}
+  Resolution, low to high:
+  1. global
+  2. [project]
+  3. [preset]
+  4. [*:preset] or [project:*]
+  5. [project:preset]
 
-         ${green("defaultTarget: .env.local  # Global default for all projects")}
+  Empty values and UNSET remove a variable.
 
-         By default, ${bold("quickenv")} writes to ${bold(".env")}. Use ${underline("target")} 
-         to change this per project, or ${underline("defaultTarget")} for all.
+${b("quickenv.yaml")}
+  projects:
+    - path: apps/web
+      target: .env.local
+    - apps/api
+  defaultTarget: .env
+  presets:
+    production:
+      target: .env.production
+      protected: true
+  variables:
+    API_KEY:
+      sensitive: true
 
-         ${underline("The presets section:")}
-         Presets can also specify a ${underline("target")} filename. A preset target
-         overrides both project-level ${underline("target")} and ${underline("defaultTarget")}.
+  Target precedence: preset target, project target, defaultTarget, .env.
+  Protected presets require confirmation when switching.
 
-         ${green("presets:")}
-         ${green("  production:")}
-         ${green("    target: .env.production")}
-         ${green("  preview:")}
-         ${green("    target: .env.preview")}
-         ${green("    protected: true")}
+${b("Commands")}
+  init                         bootstrap in current directory; no upward traversal
+  scan [-y]                    import .env* files; respects .gitignore
+  status                       show active preset, source files, projects, presets
+  list [project] | show        show resolved variables; prompts if project omitted
+  list --suffix <preset>       preview a preset without switching
+  list --no-verbose            print simple KEY=value output
+  switch [preset]              sync projects and save active preset
+  reload                       sync the active preset again
+  set <key> [value]            temporary update to generated env files
+  set <key> [value] --persist  append to highest-precedence source file
+  edit                         open source .env.quick in $EDITOR
+  reset                        revert generated files from current source/preset
+  worktree [branch]            create a git worktree with quickenv setup
+  man                          print this reference
 
-         ${underline("Target precedence:")}
-         1. ${bold("presets.<preset>.target")} - Highest
-         2. ${bold("projects[].target")}
-         3. ${bold("defaultTarget")}
-         4. ${bold(".env")} - Default fallback
+${b("Root traversal")}
+  Every command except init searches upward for the nearest quickenv.yaml.
+  Use --no-traversal to require quickenv.yaml in the current directory.
 
-       ${bold(".quickenv/.env.quick")}
-           The source of truth for all environment variables. It supports
-           grouping variables using tags. Located in the .quickenv directory.
-           The path can be customized via envPath in ${bold(".quickenv/.quickenv.state")}.
+${b("Multiple sources")}
+  .quickenv/.quickenv.state may set envPath to one file or an ordered array.
+  Later files override earlier files.
 
-           ${underline("envPath (Single File):")}
-           Point to a single shared environment file:
-           ${green("{\"envPath\": \"../shared/.quickenv/.env.quick\"}")}
+${b("Worktrees")}
+  quickenv worktree feature/my-branch
+  quickenv-worktree feature/my-branch --path ../repo-feature
 
-           ${underline("envPath (Multiple Files - Array):")}
-           Load multiple files with later files taking precedence:
-           ${green("{\"envPath\": [\"../shared/.env.quick\", \".quickenv/.env.quick\"]}")}
-           
-           Variables in the second file override those in the first,
-           allowing you to share common config while keeping local overrides.
-
-           ${underline("Tagging System:")}
-           Tags are defined in square brackets. Variables following a tag 
-           belong to that environment/scope. Wildcards (${bold("*")}) can be used 
-           to match all presets or all projects.
-
-          ${green("# Global variables (shared across all environments)")}
-          ${green("NODE_ENV=development")}
-
-          ${green("[local]")}
-          ${green("# Only applied when 'local' is switched on")}
-          ${green("API_URL=http://localhost:3000")}
-
-          ${green("[production, staging]")}
-          ${green("# Shared between production and staging environments")}
-          ${green("DB_HOST=cloud-db.internal")}
-
-          ${underline("Project and Wildcard Scoping:")}
-          You can target specific projects, use wildcards for all presets 
-          within a project, or all projects for a specific preset.
-
-          ${green("[apps/web]")}
-          ${green("# Constant for 'apps/web' project, regardless of preset")}
-          ${green("NEXT_PUBLIC_API_VERSION=v2")}
-
-          ${green("[apps/web:*]")}
-          ${green("# Same as [apps/web], matches all presets for this project")}
-          ${green("LOG_LEVEL=info")}
-
-          ${green("[*:production]")}
-          ${green("# Applied to all projects when 'production' preset is active")}
-          ${green("SENTRY_ENABLED=true")}
-
-          ${green("[apps/web:local]")}
-          ${green("# Only for 'apps/web' when 'local' preset is active")}
-          ${green("DEBUG_LEVEL=verbose")}
-
-          ${underline("Precedence Order:")}
-          1. ${bold("Project:Preset")} (e.g. [apps/web:local] or [*:local]) - Highest
-          2. ${bold("Preset")} (e.g. [local])
-          3. ${bold("Project")} (e.g. [apps/web] or [apps/web:*])
-          4. ${bold("Global")} (Untagged at top of file) - Lowest
-
-
-      ${bold("COMMANDS")}
-      ${bold("init")}       Guided setup to bootstrap quickenv in a repository.
-      ${bold("scan")}       Scan for .env.example files to discover projects.
-      ${bold("status")}     Show active preset, source files, projects, and available presets.
-      ${bold("list")}       Display effective variables for the active preset. Optionally
-                 filter by app/project (path or name); prompts if omitted.
-      ${bold("switch")}     Interactively switch between environments (tags).
-      ${bold("reload")}     Reloads the current preset without prompting.
-      ${bold("set")}        Set a variable in .env.quick and sync it.
-      ${bold("edit")}       Open a .env.quick file in your default editor. Prompts to
-                 select which file when multiple source files are configured.
-      ${bold("reset")}      Remove all managed .env files.
-      ${bold("worktree")}   Create a new git worktree with quickenv support (see HOOKS below).
-
-${bold("HOOKS")}
-      Post-worktree hooks allow you to run custom scripts after creating a new
-      git worktree. Place a hook file in ${bold(".quickenv/hooks/post-worktree.{ts,sh}")}.
-
-      The hook runs from the newly created worktree directory with these 
-      environment variables:
-          WORKTREE_PATH   Absolute path to the new worktree
-          BRANCH_NAME     Name of the branch for the worktree
-
-      Supported formats (in order of priority):
-          .ts    TypeScript (runs with Bun)
-          .sh    Shell script
-
-      If a hook fails (non-zero exit), a warning is shown but worktree 
-      creation continues. Hook output is piped to the terminal.
-     https://github.com/your-repo/quickenv
+  Optional .worktreeinclude entries are copied. Optional hooks run from
+  .quickenv/hooks/post-worktree.ts or .quickenv/hooks/post-worktree.sh with
+  WORKTREE_PATH and BRANCH_NAME.
 `);
-    });
+  });

@@ -1,312 +1,201 @@
 # quickenv
 
-A bunx utility for managing environment variables across monorepos through a centralized source of truth with environment-specific tagging.
+Manage monorepo `.env` files from one tagged source file.
 
-## Why quickenv?
+## Requirements
 
-Managing multiple `.env` files across a monorepo is tedious and error-prone. quickenv solves this by:
+- Bun
+- Git, if using worktree helpers
 
-- **Single source of truth**: Define all environment variables in one `.quickenv/.env.quick` file
-- **Tagged environments**: Use presets like `[local]`, `[production]` to organize variables
-- **Monorepo-aware**: Different values per project in your monorepo
-- **Git-safe**: Separates metadata (committable) from secrets (gitignored)
-- **Root-aware**: Commands run from subdirectories automatically use the nearest parent quickenv root
+> This repo is currently private. From a checkout, use `bun run index.ts ...`. Published usage is `bunx quickenv ...` or `bun install -g quickenv`.
 
-## Installation
+## Install / run
 
 ```bash
-# Run directly with bunx
-bunx quickenv
-
-# Or install globally
-bun install -g quickenv
+bun install
+bun run index.ts --help
+# after publish:
+bunx quickenv --help
 ```
 
-This provides two commands:
-- `quickenv` - Main CLI for managing environments
-- `quickenv-worktree` - Helper for creating git worktrees with quickenv support
+Entrypoints:
 
-## Quick Start
+- `quickenv` / `bun run index.ts` — main CLI
+- `quickenv-worktree` / `bun run scripts/create-worktree.ts` — worktree helper
+- `quickenv worktree` — same helper through the main CLI
+
+## Quick start
 
 ```bash
-# Initialize quickenv in your repository
-bunx quickenv init
+# 1. Create quickenv.yaml, .quickenv/.env.quick, and .gitignore entries
+bun run index.ts init
 
-# Scan existing .env files and populate .env.quick
-bunx quickenv scan
+# 2. Import existing .env* files, if any
+bun run index.ts scan
 
-# View current environment configuration
-bunx quickenv list
+# 3. Pick a preset and write generated env files to configured projects
+bun run index.ts switch local
 
-# Switch to a different preset (e.g., production)
-bunx quickenv switch production
-
-# Edit the source file directly
-bunx quickenv edit
-
-# Create a new worktree with quickenv support
-quickenv-worktree feature/my-branch
+# 4. Inspect what is active and what values resolve
+bun run index.ts status
+bun run index.ts list
 ```
 
-## How It Works
+`init` detects projects from package workspaces and `**/.env.example`. It creates:
 
-### File Architecture
-
-```
-repo-root/
-├── quickenv.yaml          # Metadata & configuration (committable)
-├── .quickenv/
-│   ├── .env.quick         # Source of truth for all env vars (gitignored)
-│   └── .quickenv.state    # Tracks active preset (gitignored)
-├── .gitignore
-└── apps/
-    ├── web/
-    │   └── .env.local     # Generated from .quickenv/.env.quick
-    └── api/
-        └── .env.local     # Generated from .quickenv/.env.quick
+```text
+quickenv.yaml        # committable metadata
+.quickenv/.env.quick # secret source file; gitignored
 ```
 
-### Running From Subdirectories
+`.quickenv/.quickenv.state` is created later by `switch` or worktree setup.
 
-For commands other than `init`, quickenv searches upward from the current directory for the nearest `quickenv.yaml`. If it finds one in a parent directory, it clearly reports the current directory and the quickenv root it will use, then executes the command as if it had been run from that root.
+## Mental model
 
-```bash
-# From repo-root/apps/web, this uses repo-root/quickenv.yaml
-bunx quickenv status
+1. Put all variables in `.quickenv/.env.quick`.
+2. Tag sections by preset and/or project.
+3. `switch` resolves the active preset and writes each project target file.
+4. `status` is the first troubleshooting command.
 
-# Disable parent traversal and require the current directory to be the root
-bunx quickenv --no-traversal status
-```
-
-`quickenv init` does not traverse upward; it always initializes the current directory.
-
-### The .quickenv/.env.quick Format
-
-A tagged INI-like format supporting multiple presets and projects:
+Example `.quickenv/.env.quick`:
 
 ```ini
-# Variables shared by multiple presets
-[local, preview]
+# Global variables apply everywhere
 NODE_ENV=development
-API_URL=https://dev.api.example.com
 
-# Variables specific to local preset
 [local]
-DATABASE_URL=postgres://localhost:5432/main
+API_URL=http://localhost:3000
 DEBUG=true
 
-# Override for specific project:preset combination
-[api-server:local]
-DATABASE_URL=postgres://localhost:5432/api_dev
-
-# Production preset
 [production]
-NODE_ENV=production
-DEBUG=  # Empty value removes this var in production
+API_URL=https://api.example.com
+# Empty value removes the variable
+DEBUG=
+
+[apps/api:local]
+DATABASE_URL=postgres://localhost:5432/api
 ```
 
-**Tag Precedence** (highest to lowest):
-1. `[project:preset]` or `[*:preset]` - Specific project and preset
-2. `[preset]` - Preset-specific values
-3. `[project:*]` or `[project]` - Project defaults
-4. Global (untagged) - Universal defaults
+Resolution order, lowest to highest:
 
-## Commands
+1. global untagged values
+2. project tags: `[apps/api]`
+3. preset tags: `[local]`
+4. wildcard combo tags: `[*:local]` or `[apps/api:*]`
+5. exact combo tags: `[apps/api:local]`
 
-| Command / Option | Description |
-|------------------|-------------|
-| `--no-traversal` | Do not search parent directories for a quickenv root |
-| `init` | Initialize quickenv with guided setup |
-| `scan` | Discover and import existing .env files |
-| `status` | Show active preset, source files, projects, and available presets |
-| `list [app]` (or `show`) | Display effective variables for active preset; optionally filter by app/project (prompts if omitted) |
-| `switch [preset]` | Sync all projects to a preset (interactive TUI if no preset) |
-| `set [key] [value]` | Update variables across presets |
-| `reset` | Revert local .env files to match .quickenv/.env.quick |
-| `edit` | Open a .env.quick file in $EDITOR; prompts to select which file when multiple are configured |
-| `reload` | Re-sync without changing preset |
-| `worktree [branch]` | Create new git worktree with quickenv support (supports hooks) |
+Empty values and `UNSET` remove a variable.
 
-### Examples
-
-```bash
-# Switch to production preset
-bunx quickenv switch production
-
-# Run from a subdirectory without searching parent directories
-bunx quickenv --no-traversal status
-
-# View variables for a specific suffix
-bunx quickenv list --suffix .production
-
-# Set a variable persistently in .quickenv/.env.quick
-bunx quickenv set API_KEY secret123 --persist
-
-# Interactive TUI for choosing projects and presets
-bunx quickenv set DATABASE_URL
-
-# Reset all .env files to match current preset
-bunx quickenv reset
-
-# Create a new worktree with quickenv support
-quickenv-worktree feature/my-branch
-
-# Create worktree at custom path
-quickenv-worktree feature/my-branch --path ../my-project-feature
-```
-
-## Configuration (quickenv.yaml)
+## `quickenv.yaml`
 
 ```yaml
 projects:
   - path: apps/web
-    suffix: .local
-  - path: apps/api
-    suffix: .local
+    target: .env.local
+  - apps/api
+
+defaultTarget: .env
+
+presets:
+  production:
+    target: .env.production
+    protected: true
 
 variables:
-  DATABASE_URL:
-    sensitive: true
   API_KEY:
     sensitive: true
-    # Optional: custom masking with regex
-    revealPattern: "^(?<prefix>.{4}).*(?<suffix>.{4})$"
-    maskGroups: [prefix, suffix]
-
-tui:
-  presets:
-    - name: local
-      description: Local development
-    - name: production
-      description: Production environment
+  TOKEN:
+    sensitive: true
+    revealPattern: "^(.{4}).*(.{4})$"
+    maskGroups: [1, 2]
 ```
 
-## Worktree Support
+Target precedence, highest to lowest: `presets.<preset>.target`, `projects[].target`, `defaultTarget`, `.env`.
 
-quickenv works seamlessly with git worktrees. When you create a new worktree, you can automatically copy shared configuration files and set up quickenv.
+`protected: true` marks risky presets. `switch` asks for confirmation and `status` shows the protection state.
 
-### Setting Up Worktrees
+## Commands
 
-1. Create a `.worktreeinclude` file in your main worktree:
-```
-# Files to copy when creating new worktrees
-.quickenv/.env.quick
-```
+| Command | Purpose |
+| --- | --- |
+| `init` | Bootstrap config/source files in the current directory. Does not traverse upward. |
+| `scan [-y]` | Import discovered `.env*` files into config and `.env.quick`; respects `.gitignore`. |
+| `status` | Show active preset, source files, projects, and available presets. |
+| `list [project]` / `show` | Show resolved variables for active preset. Matches project path, basename, or partial path. |
+| `list --suffix <preset>` | Preview another preset without switching. |
+| `list --no-verbose` | Print simple `KEY=value` output. |
+| `switch [preset]` | Write generated env files and save active preset. Prompts when omitted. |
+| `reload` | Re-run `switch` for the active preset. |
+| `set <key> [value]` | Temporarily update generated files for the active preset. Empty value removes. |
+| `set <key> [value] --persist [--preset <preset>]` | Append the value to the highest-precedence `.env.quick` source file. |
+| `edit` | Open a source `.env.quick` file in `$EDITOR`; prompts when multiple sources exist. |
+| `reset` | Revert generated env files to the current source/active preset. |
+| `man` | Print detailed built-in reference. |
+| `worktree <branch>` | Create a Git worktree with quickenv setup. |
+| `--no-traversal` | Require the current directory to contain `quickenv.yaml`. |
 
-2. Create a new worktree with quickenv support:
-```bash
-# Create worktree for new feature branch
-quickenv-worktree feature/my-branch
-```
+For every command except `init`, quickenv searches upward for the nearest `quickenv.yaml` and runs from that root.
 
-This will:
-- Create a new git worktree for the branch
-- Copy files listed in `.worktreeinclude`
-- Initialize `.quickenv/.quickenv.state` with `envPath` pointing to the main worktree's `.quickenv/.env.quick`
+## Multiple source files
 
-### Worktree Configuration
-
-Each worktree has its own `.quickenv/.quickenv.state` (tracking active preset) with `envPath` pointing to the shared `.quickenv/.env.quick`:
-
-```
-main-worktree/
-├── .quickenv/
-│   ├── .quickenv.state  # activePreset: production
-│   └── .env.quick       # Shared secrets
-
-feature-worktree/
-├── .quickenv/
-│   ├── .quickenv.state  # activePreset: local, envPath: ../main-worktree/.quickenv/.env.quick
-│   └── .env.quick       # activePreset: local (worktree-specific)
-```
-
-This allows each worktree to have its own active preset while sharing the same environment definitions.
-
-### Multiple Environment Files (envPath Array)
-
-`envPath` can also accept an array of paths, with later files taking precedence over earlier ones. This is useful for inheriting from a shared config while overriding specific variables:
+`.quickenv/.quickenv.state` can point `envPath` at one file or an ordered list:
 
 ```json
 {
+  "activePreset": "local",
   "envPath": ["../shared/.quickenv/.env.quick", ".quickenv/.env.quick"]
 }
 ```
 
-In this example:
-- Variables from `../shared/.quickenv/.env.quick` are loaded first
-- Variables from `.quickenv/.env.quick` are loaded second and override any duplicates
-- This allows you to share common configuration while keeping local overrides
+Later files override earlier files. Missing custom paths are ignored while any custom path exists; if none exist, quickenv falls back to `.quickenv/.env.quick` when it exists.
 
-This pattern is useful for monorepos where you want a shared base configuration with project-specific overrides.
-
-### Post-Worktree Hooks
-
-You can run custom scripts after a worktree is created by placing a hook file in `.quickenv/hooks/post-worktree.{ts,sh}`. The hook runs from the newly created worktree directory with the following environment variables:
-
-- `WORKTREE_PATH` - Absolute path to the new worktree
-- `BRANCH_NAME` - Name of the branch for the worktree
-
-**Supported formats:**
-- `.ts` - TypeScript (runs with Bun)
-- `.sh` - Shell script
-
-**Priority:** If both `.ts` and `.sh` exist, the `.ts` hook is preferred.
-
-**Example:**
+## Worktrees
 
 ```bash
-# Create the hooks directory
-mkdir -p .quickenv/hooks
-
-# Create a TypeScript hook
-cat > .quickenv/hooks/post-worktree.ts << 'EOF'
-// Run npm install in the new worktree
-import { $ } from "bun";
-
-const worktreePath = process.env.WORKTREE_PATH;
-console.log(`Setting up worktree at ${worktreePath}`);
-
-await $`cd ${worktreePath} && npm install`.quiet();
-console.log("Dependencies installed!");
-EOF
-
-# Or create a shell hook
-cat > .quickenv/hooks/post-worktree.sh << 'EOF'
-#!/bin/sh
-echo "Setting up worktree at $WORKTREE_PATH"
-cd "$WORKTREE_PATH" && npm install
-echo "Done!"
-EOF
-chmod +x .quickenv/hooks/post-worktree.sh
+# from the main worktree
+bun run index.ts worktree feature/my-branch
+# or
+bun run scripts/create-worktree.ts feature/my-branch --path ../repo-feature
 ```
 
-**Notes:**
-- Hooks are per-developer (`.quickenv/` is gitignored)
-- If a hook fails (non-zero exit), a warning is shown but worktree creation continues
-- Hook output is piped to the terminal
+Optional `.worktreeinclude` files are copied into the new worktree, for example:
+
+```text
+.quickenv/.env.quick
+.env.local
+```
+
+The helper creates `.quickenv/.quickenv.state` in the new worktree. If the source worktree state has `envPath`, it copies that setting so the new worktree can share the same source files.
+
+Optional hooks run after creation:
+
+```text
+.quickenv/hooks/post-worktree.ts  # preferred, runs with Bun
+.quickenv/hooks/post-worktree.sh
+```
+
+Hook env vars: `WORKTREE_PATH`, `BRANCH_NAME`. Hook failure warns but does not undo the worktree.
 
 ## Security
 
-- **No secrets in config**: `quickenv.yaml` is designed to be committed; it contains metadata only
-- **Gitignore respect**: Never reads or commits gitignored files (except `.quickenv/.quickenv.state`)
-- **Sensitive masking**: Automatically masks sensitive variables in CLI output
-- **Default masking**: Shows first/last 4 chars for values > 16 chars, or first/last 2 for shorter
-
-## Requirements
-
-- [Bun](https://bun.sh/) runtime
+- Commit `quickenv.yaml`; do not commit `.quickenv/`.
+- Secret-looking output is masked by `variables.<name>.sensitive`.
+- `scan` respects `.gitignore` and skips `.git`/`node_modules`.
 
 ## Development
 
 ```bash
-# Install dependencies
 bun install
-
-# Run the CLI
-bun run index.ts
-
-# Run tests
+bun run typecheck
 bun test
+bun run check
+```
+
+Useful local smoke test:
+
+```bash
+bun run index.ts status
+bun run index.ts list --suffix local --no-verbose
 ```
 
 ## License

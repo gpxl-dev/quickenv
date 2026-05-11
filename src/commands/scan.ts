@@ -124,10 +124,8 @@ export async function performScan(rootDir: string, options: { yes?: boolean } = 
 
     // 1. Update quickenv.yaml
     const configPath = join(rootDir, "quickenv.yaml");
-    let config = await loadConfig(configPath);
-    if (!config) {
-        config = { projects: [], variables: {} };
-    }
+    const loadedConfig = await loadConfig(configPath);
+    const config: Config = loadedConfig ?? { projects: [], presets: {}, variables: {} };
     
     // Normalize existing projects to strings or paths
     const existingProjectPaths = new Set(config.projects.map(p => typeof p === 'string' ? p : p.path));

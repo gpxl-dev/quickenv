@@ -9,13 +9,14 @@
   },
   "private": true,
   "scripts": {
-    "test": "bun test"
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "check": "bun run typecheck && bun test"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/picomatch": "^4.0.2"
-  },
-  "peerDependencies": {
+    "@types/picomatch": "^4.0.2",
     "typescript": "^5"
   },
   "dependencies": {
