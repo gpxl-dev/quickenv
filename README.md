@@ -10,6 +10,7 @@ Managing multiple `.env` files across a monorepo is tedious and error-prone. qui
 - **Tagged environments**: Use presets like `[local]`, `[production]` to organize variables
 - **Monorepo-aware**: Different values per project in your monorepo
 - **Git-safe**: Separates metadata (committable) from secrets (gitignored)
+- **Root-aware**: Commands run from subdirectories automatically use the nearest parent quickenv root
 
 ## Installation
 
@@ -65,6 +66,20 @@ repo-root/
         └── .env.local     # Generated from .quickenv/.env.quick
 ```
 
+### Running From Subdirectories
+
+For commands other than `init`, quickenv searches upward from the current directory for the nearest `quickenv.yaml`. If it finds one in a parent directory, it clearly reports the current directory and the quickenv root it will use, then executes the command as if it had been run from that root.
+
+```bash
+# From repo-root/apps/web, this uses repo-root/quickenv.yaml
+bunx quickenv status
+
+# Disable parent traversal and require the current directory to be the root
+bunx quickenv --no-traversal status
+```
+
+`quickenv init` does not traverse upward; it always initializes the current directory.
+
 ### The .quickenv/.env.quick Format
 
 A tagged INI-like format supporting multiple presets and projects:
@@ -98,8 +113,9 @@ DEBUG=  # Empty value removes this var in production
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
+| Command / Option | Description |
+|------------------|-------------|
+| `--no-traversal` | Do not search parent directories for a quickenv root |
 | `init` | Initialize quickenv with guided setup |
 | `scan` | Discover and import existing .env files |
 | `status` | Show active preset, source files, projects, and available presets |
@@ -116,6 +132,9 @@ DEBUG=  # Empty value removes this var in production
 ```bash
 # Switch to production preset
 bunx quickenv switch production
+
+# Run from a subdirectory without searching parent directories
+bunx quickenv --no-traversal status
 
 # View variables for a specific suffix
 bunx quickenv list --suffix .production
