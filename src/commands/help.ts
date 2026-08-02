@@ -9,39 +9,40 @@ export const helpCommand = new Command("man")
 
     console.log(`
 ${b("quickenv")}
-  Manage monorepo .env files from one tagged source file.
+  Manage monorepo .env files from one preset-based source file.
 
 ${b("Quick start")}
-  quickenv init          create quickenv.yaml and .quickenv/.env.quick
+  quickenv init          create quickenv.yaml and .quickenv/.env.quick.yaml
   quickenv scan          import existing .env* files
   quickenv switch local  write generated env files
   quickenv status        inspect active preset, sources, projects
   quickenv list          inspect resolved variables
 
 ${b("Files")}
-  ${c("quickenv.yaml")}             committable project/preset metadata
-  ${c(".quickenv/.env.quick")}      secret source file; gitignored
-  ${c(".quickenv/.quickenv.state")} active preset/envPath state; gitignored
+  ${c("quickenv.yaml")}                  committable project/preset metadata
+  ${c(".quickenv/.env.quick.yaml")}      preferred secret source; gitignored
+  ${c(".quickenv/.env.quick")}           legacy fallback source; gitignored
+  ${c(".quickenv/.quickenv.state")}      active preset/envPath state; gitignored
 
-${b(".env.quick format")}
-  Global values are untagged. Sections may target presets, projects, or both.
+${b(".env.quick.yaml format")}
+  Top-level keys are selectable presets. Presets can inherit complete presets.
 
-  NODE_ENV=development
+  base:
+    "*":
+      NODE_ENV: development
+    shared:
+      DATABASE_URL: postgres://localhost/app
+    apps/api:
+      $shared: [DATABASE_URL]
+      PORT: 3000
+  local:
+    extends: base
+    shared:
+      DATABASE_URL: postgres://localhost/app_local
 
-  [local]
-  API_URL=http://localhost:3000
-
-  [apps/api:local]
-  DATABASE_URL=postgres://localhost:5432/api
-
-  Resolution, low to high:
-  1. global
-  2. [project]
-  3. [preset]
-  4. [*:preset] or [project:*]
-  5. [project:preset]
-
-  Empty values and UNSET remove a variable.
+  "all" is an alias for "*". Scalar values become strings.
+  Empty strings and UNSET remove a variable.
+  The legacy .env.quick tagged format remains supported when YAML is absent.
 
 ${b("quickenv.yaml")}
   projects:
@@ -70,8 +71,8 @@ ${b("Commands")}
   switch [preset]              sync projects and save active preset
   reload                       sync the active preset again
   set <key> [value]            temporary update to generated env files
-  set <key> [value] --persist  append to highest-precedence source file
-  edit                         open source .env.quick in $EDITOR
+  set <key> [value] --persist  update the highest-precedence source file
+  edit                         open an environment source in $EDITOR
   reset                        revert generated files from current source/preset
   worktree [branch]            create a git worktree with quickenv setup
   man                          print this reference

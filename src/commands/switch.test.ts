@@ -217,6 +217,35 @@ SINGLE_VAR=value
         expect(await envFile.text()).toContain("SINGLE_VAR=value");
     });
 
+    it("should resolve preset-centric YAML inheritance and shared overrides", async () => {
+        const projectPath = join(tmpDir, "apps/yaml-app");
+        await mkdir(projectPath, { recursive: true });
+        await writeFile(join(tmpDir, "quickenv.yaml"), `projects:\n  - apps/yaml-app\n`);
+        await mkdir(join(tmpDir, ".quickenv"), { recursive: true });
+        await rm(join(tmpDir, ".quickenv/.quickenv.state"), { force: true });
+        await writeFile(join(tmpDir, ".quickenv/.env.quick.yaml"), `
+base:
+  all:
+    COMMON: true
+  shared:
+    DATABASE_URL: postgres://base
+  apps/yaml-app:
+    $shared: [DATABASE_URL]
+    PORT: 3000
+local:
+  extends: base
+  shared:
+    DATABASE_URL: postgres://local
+`);
+
+        await performSwitch("local", tmpDir);
+
+        const envContent = await Bun.file(join(projectPath, ".env")).text();
+        expect(envContent).toContain("COMMON=true");
+        expect(envContent).toContain("DATABASE_URL=postgres://local");
+        expect(envContent).toContain("PORT=3000");
+    });
+
     it("should handle absolute paths in envPath array", async () => {
         const projectPath = join(tmpDir, "apps/abs-app");
         const sharedDir = join(tmpDir, "shared-abs");

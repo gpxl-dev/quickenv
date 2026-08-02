@@ -2,7 +2,11 @@ import { Command } from "commander";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { loadConfig, loadState, resolveEnvQuickPath } from "../core/config";
-import { parseEnvQuick } from "../core/parser";
+import {
+  isEnvQuickYamlPath,
+  parseEnvQuickSource,
+  parseEnvQuickYamlSources,
+} from "../core/parser";
 import { maskValue } from "../core/masking";
 import { basename } from "path";
 
@@ -40,8 +44,8 @@ interface AnnotatedSection {
   variables: Record<string, AnnotatedVariable>;
 }
 
-function parseAndAnnotate(content: string, sourceIndex: number): AnnotatedSection[] {
-  const sections = parseEnvQuick(content);
+function parseAndAnnotate(content: string, path: string, sourceIndex: number): AnnotatedSection[] {
+  const sections = parseEnvQuickSource(content, path);
   return sections.map(s => ({
     tags: s.tags,
     variables: Object.fromEntries(
@@ -51,20 +55,59 @@ function parseAndAnnotate(content: string, sourceIndex: number): AnnotatedSectio
 }
 
 function mergeAnnotatedSections(
-  fileContents: Array<{ content: string; sourceIndex: number }>
+  fileContents: Array<{ content: string; path: string; sourceIndex: number }>
 ): AnnotatedSection[] {
   const sectionsMap = new Map<string, Map<string, AnnotatedVariable>>();
 
-  for (const { content, sourceIndex } of fileContents) {
-    const sections = parseAndAnnotate(content, sourceIndex);
-    for (const section of sections) {
-      const tagKey = section.tags.join(",");
-      if (!sectionsMap.has(tagKey)) {
-        sectionsMap.set(tagKey, new Map());
+  if (fileContents.length > 0 && fileContents.every(file => isEnvQuickYamlPath(file.path))) {
+    const yamlContents: string[] = [];
+    let previous = new Map<string, Map<string, AnnotatedVariable>>();
+
+    // Resolve every ordered prefix. A value gets attributed to the source that
+    // most recently changed its effective value through an override or import.
+    for (let index = 0; index < fileContents.length; index++) {
+      const { content, sourceIndex } = fileContents[index]!;
+      yamlContents.push(content);
+      const current = new Map<string, Map<string, AnnotatedVariable>>();
+      let sections: ReturnType<typeof parseEnvQuickYamlSources>;
+      try {
+        sections = parseEnvQuickYamlSources(yamlContents);
+      } catch (error) {
+        // A valid overlay may reference a preset declared by a later source.
+        // Defer validation until the complete ordered source set is available.
+        if (index < fileContents.length - 1) continue;
+        throw error;
       }
-      const varMap = sectionsMap.get(tagKey)!;
-      for (const [key, annotated] of Object.entries(section.variables)) {
-        varMap.set(key, annotated);
+      for (const section of sections) {
+        const tagKey = section.tags.join(",");
+        const previousVariables = previous.get(tagKey);
+        const variables = new Map<string, AnnotatedVariable>();
+        for (const [key, value] of Object.entries(section.variables)) {
+          const prior = previousVariables?.get(key);
+          variables.set(key, prior?.value === value
+            ? prior
+            : { value, sourceIndex, setBy: "" });
+        }
+        current.set(tagKey, variables);
+      }
+      previous = current;
+    }
+
+    for (const [tagKey, variables] of previous) {
+      sectionsMap.set(tagKey, variables);
+    }
+  } else {
+    for (const { content, path, sourceIndex } of fileContents) {
+      const sections = parseAndAnnotate(content, path, sourceIndex);
+      for (const section of sections) {
+        const tagKey = section.tags.join(",");
+        if (!sectionsMap.has(tagKey)) {
+          sectionsMap.set(tagKey, new Map());
+        }
+        const varMap = sectionsMap.get(tagKey)!;
+        for (const [key, annotated] of Object.entries(section.variables)) {
+          varMap.set(key, annotated);
+        }
       }
     }
   }
@@ -282,10 +325,11 @@ export const listCommand = new Command("list")
     const projectLabel = selectedProject ? ` (${selectedProject})` : "";
 
     // Load and annotate all source files
-    const fileContents: Array<{ content: string; sourceIndex: number }> = [];
+    const fileContents: Array<{ content: string; path: string; sourceIndex: number }> = [];
     for (let i = 0; i < envResult.paths.length; i++) {
-      const content = await Bun.file(envResult.paths[i]!).text();
-      fileContents.push({ content, sourceIndex: i });
+      const path = envResult.paths[i]!;
+      const content = await Bun.file(path).text();
+      fileContents.push({ content, path, sourceIndex: i });
     }
 
     const annotatedSections = mergeAnnotatedSections(fileContents);

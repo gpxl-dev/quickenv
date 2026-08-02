@@ -3,6 +3,7 @@ import * as p from "@clack/prompts";
 import ignore from "ignore";
 import { join, dirname } from "path";
 import { $ } from "bun";
+import YAML from "yaml";
 import { resolveEnvQuickPath } from "../core/config";
 
 export const initCommand = new Command("init")
@@ -95,32 +96,31 @@ variables:
             p.log.info("quickenv.yaml already exists. Skipping.");
         }
         
-        // 4. Create .quickenv directory and .env.quick
+        // 4. Create .quickenv directory and the preferred YAML source.
         await $`mkdir -p .quickenv`;
         const envResult = await resolveEnvQuickPath();
         const envPath = envResult.path;
         if (!(await Bun.file(envPath).exists())) {
-            let initialEnvContent = `# Shared variables
-# NODE_ENV=development
+            const initialVariables: Record<string, string> = { DEBUG: "true" };
 
-# Global variables (applied everywhere)
-# AUTH_URL=http://localhost:3337
-
-[local]
-# Add local overrides here
-DEBUG=true
-
-# [apps/web]
-# # Project-specific constant (overrides presets)
-# APP_TITLE=My Web App
-`;
-            // Try to pre-fill from an example if available
+            // Pre-fill the local preset from a root example when available.
             const rootExample = Bun.file(".env.example");
             if (await rootExample.exists()) {
                 const content = await rootExample.text();
-                initialEnvContent += `\n# Imported from .env.example\n${content}`;
+                for (const line of content.split(/\r?\n/)) {
+                    const trimmed = line.trim();
+                    if (!trimmed || trimmed.startsWith("#")) continue;
+                    const equals = trimmed.indexOf("=");
+                    if (equals === -1) continue;
+                    initialVariables[trimmed.slice(0, equals).trim()] = trimmed.slice(equals + 1).trim();
+                }
             }
 
+            const initialEnvContent = YAML.stringify({
+                local: {
+                    "*": initialVariables,
+                },
+            });
             await Bun.write(envPath, initialEnvContent);
             p.log.success(`Created ${envPath}`);
         } else {

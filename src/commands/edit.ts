@@ -4,7 +4,7 @@ import { resolveEnvQuickPath } from "../core/config";
 import { spawn } from "child_process";
 
 export const editCommand = new Command("edit")
-  .description("Opens the .env.quick file in your default editor")
+  .description("Opens the environment source file in your default editor")
   .action(async () => {
     const envResult = await resolveEnvQuickPath();
 

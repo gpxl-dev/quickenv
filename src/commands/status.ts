@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import pc from "picocolors";
-import { loadConfig, loadState, resolveEnvQuickPath, loadMergedEnvQuick } from "../core/config";
-import { parseEnvQuick, type QuickEnvSection } from "../core/parser";
+import { loadConfig, loadState, resolveEnvQuickPath, loadEnvQuickSections } from "../core/config";
+import type { QuickEnvSection } from "../core/parser";
 import { join } from "path";
 
 function getPresets(sections: QuickEnvSection[]): string[] {
@@ -81,8 +81,7 @@ export const statusCommand = new Command("status")
     ).some(Boolean);
     if (anySourceExists) {
       try {
-        const content = await loadMergedEnvQuick(envResult);
-        const sections = parseEnvQuick(content);
+        const sections = await loadEnvQuickSections(envResult);
         presetNames = getPresets(sections);
       } catch {
         // ignore parse errors

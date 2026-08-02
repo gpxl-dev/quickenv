@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { resolveEnvQuickPath, loadMergedEnvQuick, loadState, saveState } from "./config";
+import {
+  resolveEnvQuickPath,
+  loadEnvQuickSections,
+  loadMergedEnvQuick,
+  loadState,
+  saveState,
+} from "./config";
 import { join } from "path";
 import { mkdtemp, writeFile, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "os";
@@ -22,9 +28,33 @@ describe("resolveEnvQuickPath", () => {
 
     const result = await resolveEnvQuickPath(statePath);
 
-    expect(result.path).toBe(join(tmpDir, ".quickenv/.env.quick"));
-    expect(result.paths).toEqual([join(tmpDir, ".quickenv/.env.quick")]);
+    expect(result.path).toBe(join(tmpDir, ".quickenv/.env.quick.yaml"));
+    expect(result.paths).toEqual([join(tmpDir, ".quickenv/.env.quick.yaml")]);
     expect(result.isCustom).toBe(false);
+  });
+
+  it("should prefer the default YAML source when both formats exist", async () => {
+    await mkdir(join(tmpDir, ".quickenv"), { recursive: true });
+    const yamlPath = join(tmpDir, ".quickenv/.env.quick.yaml");
+    const legacyPath = join(tmpDir, ".quickenv/.env.quick");
+    await writeFile(yamlPath, "local: {}\n");
+    await writeFile(legacyPath, "[legacy]\nVALUE=old\n");
+
+    const result = await resolveEnvQuickPath(join(tmpDir, ".quickenv/.quickenv.state"));
+
+    expect(result.path).toBe(yamlPath);
+    expect(result.paths).toEqual([yamlPath]);
+  });
+
+  it("should use the default legacy source when YAML is absent", async () => {
+    await mkdir(join(tmpDir, ".quickenv"), { recursive: true });
+    const legacyPath = join(tmpDir, ".quickenv/.env.quick");
+    await writeFile(legacyPath, "[local]\nVALUE=old\n");
+
+    const result = await resolveEnvQuickPath(join(tmpDir, ".quickenv/.quickenv.state"));
+
+    expect(result.path).toBe(legacyPath);
+    expect(result.paths).toEqual([legacyPath]);
   });
 
   it("should handle single string envPath", async () => {
@@ -138,6 +168,21 @@ describe("loadMergedEnvQuick", () => {
 
   afterEach(async () => {
     await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("should compose inheritance across multiple YAML sources", async () => {
+    const file1 = join(tmpDir, "base.env.quick.yaml");
+    const file2 = join(tmpDir, "override.env.quick.yaml");
+    await writeFile(file1, `base:\n  shared:\n    URL: base\n  app:\n    $shared: [URL]\nlocal:\n  extends: base\n`);
+    await writeFile(file2, `local:\n  shared:\n    URL: override\n`);
+
+    const sections = await loadEnvQuickSections({
+      path: file2,
+      paths: [file1, file2],
+      isCustom: true,
+    });
+
+    expect(sections.find(section => section.tags[0] === "app:local")?.variables.URL).toBe("override");
   });
 
   it("should return content of single file", async () => {

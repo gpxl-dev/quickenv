@@ -5,8 +5,13 @@ import { join, relative, dirname, basename } from "path";
 import { readdir } from "node:fs/promises";
 import { stat } from "node:fs/promises";
 import YAML from "yaml";
-import { loadConfig, type Config, resolveEnvQuickPath } from "../core/config";
-import { parseEnvQuick, type QuickEnvSection } from "../core/parser";
+import {
+    loadConfig,
+    loadEnvQuickSections,
+    type Config,
+    resolveEnvQuickPath,
+} from "../core/config";
+import { updateEnvQuickContent, type EnvQuickUpdate } from "../core/parser";
 
 async function scanFiles(dir: string, ig: any, rootDir: string): Promise<string[]> {
     const entries = await readdir(dir, { withFileTypes: true });
@@ -34,19 +39,6 @@ async function scanFiles(dir: string, ig: any, rootDir: string): Promise<string[
         }
     }
     return results;
-}
-
-// Simple serializer for QuickEnvSection
-function stringifyEnvQuick(sections: QuickEnvSection[]): string {
-    return sections.map(section => {
-      const tags = section.tags.length > 0 ? `[${section.tags.join(", ")}]\n` : "";
-      const vars = Object.entries(section.variables)
-        .map(([k, v]) => `${k}=${v}`)
-        .join("\n");
-      // Add newline only if there are variables or tags
-      if (!tags && !vars) return "";
-      return `${tags}${vars}`;
-    }).filter(s => s).join("\n\n") + "\n";
 }
 
 export async function performScan(rootDir: string, options: { yes?: boolean } = {}) {
@@ -149,47 +141,31 @@ export async function performScan(rootDir: string, options: { yes?: boolean } = 
         p.log.info("No new projects to add to quickenv.yaml");
     }
 
-    // 2. Update .env.quick
+    // 2. Update the preferred environment source.
     const envResult = await resolveEnvQuickPath(join(rootDir, ".quickenv/.quickenv.state"));
     const quickPath = envResult.path;
     const quickFile = Bun.file(quickPath);
-    let quickContent = "";
-    let sections: QuickEnvSection[] = [];
-
-    if (await quickFile.exists()) {
-        quickContent = await quickFile.text();
-        sections = parseEnvQuick(quickContent);
-    }
-
-    // Merge updates
-    let envChanged = false;
-    for (const update of envUpdates) {
-        const tag = update.project ? `${update.project}:${update.preset}` : update.preset;
-        
-        // Find existing section with this tag
-        let section = sections.find(s => s.tags.includes(tag));
-        if (!section) {
-            section = sections.find(s => s.tags.length === 1 && s.tags[0] === tag);
-        }
-
-        if (!section) {
-            section = { tags: [tag], variables: {} };
-            sections.push(section);
-        }
-
-        // Add variables
-        for (const [k, v] of Object.entries(update.variables)) {
-            if (!section.variables[k]) {
-                section.variables[k] = v;
-                envChanged = true;
-            }
-        }
-    }
+    const quickFileExists = await quickFile.exists();
+    const quickContent = quickFileExists ? await quickFile.text() : "";
+    const mergedEffectiveSections = quickFileExists
+        ? await loadEnvQuickSections(envResult)
+        : [];
+    const updates: EnvQuickUpdate[] = envUpdates.map(update => ({
+        preset: update.preset,
+        project: update.project,
+        variables: update.variables,
+    }));
+    const newContent = updateEnvQuickContent(
+        quickContent,
+        quickPath,
+        updates,
+        { onlyIfMissing: true, mergedEffectiveSections },
+    );
+    const envChanged = newContent !== quickContent;
 
     if (envChanged) {
         p.log.info("Found new variables from .env files.");
         if (options.yes || await p.confirm({ message: `Update ${quickPath} with found variables?` })) {
-            const newContent = stringifyEnvQuick(sections);
             await Bun.write(quickPath, newContent);
             p.log.success(`Updated ${quickPath}`);
         }

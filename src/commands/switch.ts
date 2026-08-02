@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import * as p from "@clack/prompts";
-import { loadConfig, loadState, saveState, resolveEnvQuickPath, loadMergedEnvQuick } from "../core/config";
-import { parseEnvQuick, type QuickEnvSection } from "../core/parser";
+import { loadConfig, loadState, saveState, resolveEnvQuickPath, loadEnvQuickSections } from "../core/config";
+import type { QuickEnvSection } from "../core/parser";
 import { resolveEnv } from "../core/resolver";
 import { join } from "path";
 
@@ -43,17 +43,16 @@ export async function performSwitch(preset: string, rootDir: string = process.cw
     const envFile = Bun.file(envResult.path);
     if (!(await envFile.exists())) {
         if (envResult.isCustom) {
-            console.error(`.env.quick not found at ${envResult.path} (custom path from .quickenv.state)`);
+            console.error(`Environment source not found at ${envResult.path} (custom path from .quickenv.state)`);
         } else if (envResult.fallbackFrom) {
-            console.error(`.env.quick not found at ${envResult.fallbackFrom} (custom path from .quickenv.state), also not found at default location ${envResult.path}`);
+            console.error(`Environment source not found at ${envResult.fallbackFrom} (custom path from .quickenv.state), or at default location ${envResult.path}`);
         } else {
-            console.error(`.env.quick not found at ${envResult.path}`);
+            console.error(`Environment source not found at ${envResult.path}`);
         }
         process.exit(1);
     }
     
-    const content = await loadMergedEnvQuick(envResult);
-    const sections = parseEnvQuick(content);
+    const sections = await loadEnvQuickSections(envResult);
 
     const projects = config.projects || [];
     if (projects.length === 0) {
@@ -107,20 +106,19 @@ export const switchCommand = new Command("switch")
             const envFile = Bun.file(envResult.path);
             if (!(await envFile.exists())) {
                 if (envResult.isCustom) {
-                    console.error(`.env.quick not found at ${envResult.path} (custom path from .quickenv.state)`);
+                    console.error(`Environment source not found at ${envResult.path} (custom path from .quickenv.state)`);
                 } else if (envResult.fallbackFrom) {
-                    console.error(`.env.quick not found at ${envResult.fallbackFrom} (custom path from .quickenv.state), also not found at default location ${envResult.path}`);
+                    console.error(`Environment source not found at ${envResult.fallbackFrom} (custom path from .quickenv.state), or at default location ${envResult.path}`);
                 } else {
-                    console.error(`.env.quick not found at ${envResult.path}`);
+                    console.error(`Environment source not found at ${envResult.path}`);
                 }
                 process.exit(1);
             }
-            const content = await loadMergedEnvQuick(envResult);
-            const sections = parseEnvQuick(content);
+            const sections = await loadEnvQuickSections(envResult);
             const presets = getPresets(sections);
             
             if (presets.length === 0) {
-                console.error("No presets found in .env.quick.");
+                console.error("No presets found in the environment source.");
                 process.exit(1);
             }
             

@@ -3,7 +3,7 @@ import { performScan } from "./scan";
 import { join } from "path";
 import { mkdir, writeFile, rm } from "node:fs/promises";
 import { loadConfig } from "../core/config";
-import { parseEnvQuick } from "../core/parser";
+import { parseEnvQuickYaml } from "../core/parser";
 
 describe("scan command", () => {
     const tmpDir = join(process.cwd(), "tmp_test_scan_" + Date.now());
@@ -47,11 +47,11 @@ describe("scan command", () => {
         // ignored_dir should NOT be in projects
         expect(projects).not.toContain("ignored_dir");
 
-        // Verify .env.quick
-        const quickFile = Bun.file(join(tmpDir, ".quickenv/.env.quick"));
+        // Verify the preferred YAML source.
+        const quickFile = Bun.file(join(tmpDir, ".quickenv/.env.quick.yaml"));
         expect(await quickFile.exists()).toBe(true);
         const quickContent = await quickFile.text();
-        const sections = parseEnvQuick(quickContent);
+        const sections = parseEnvQuickYaml(quickContent);
 
         // Check for root var (mapped to [local])
         // .env maps to local preset.

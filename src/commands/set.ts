@@ -1,7 +1,7 @@
 import { Command } from "commander";
-import { loadConfig, loadState, resolveEnvQuickPath, loadMergedEnvQuick } from "../core/config";
+import { loadConfig, loadState, resolveEnvQuickPath, loadEnvQuickSections } from "../core/config";
 import { performSwitch } from "./switch";
-import { parseEnvQuick, type QuickEnvSection } from "../core/parser";
+import { updateEnvQuickContent, type QuickEnvSection } from "../core/parser";
 import { resolveEnv } from "../core/resolver";
 import { join } from "path";
 
@@ -9,7 +9,7 @@ export const setCommand = new Command("set")
   .description("Updates a variable across projects/presets")
   .argument("<key>", "Variable name")
   .argument("[value]", "Variable value")
-  .option("-p, --persist", "Persist change to the environment file (e.g. .env.quick)")
+  .option("-p, --persist", "Persist change to the environment source")
   .option("--preset <preset>", "Target preset (defaults to active)")
   .action(async (key, value, options) => {
       const state = await loadState();
@@ -30,8 +30,7 @@ export const setCommand = new Command("set")
       const val = value === undefined ? "" : value;
 
       if (options.persist) {
-          // Append to .env.quick (last file in array has highest precedence)
-          
+          // Update the last source file in the array because it has highest precedence.
           let content = "";
           const envResult = await resolveEnvQuickPath();
           const envPath = envResult.path; // Last path in array (highest precedence)
@@ -40,8 +39,11 @@ export const setCommand = new Command("set")
               content = await file.text();
           }
           
-          const append = `\n[${targetPreset}]\n${key}=${val}\n`;
-          await Bun.write(envPath, content + append);
+          const updated = updateEnvQuickContent(content, envPath, [{
+              preset: targetPreset,
+              variables: { [key]: val },
+          }]);
+          await Bun.write(envPath, updated);
           console.log(`Persisted ${key}=${val} to ${envPath} for preset '${targetPreset}'`);
           
           if (targetPreset === activePreset) {
@@ -54,8 +56,7 @@ export const setCommand = new Command("set")
           const envResult = await resolveEnvQuickPath();
           let sections: QuickEnvSection[] = [];
           if (envResult.paths.length > 0 && await Bun.file(envResult.paths[0]!).exists()) {
-              const content = await loadMergedEnvQuick(envResult);
-              sections = parseEnvQuick(content);
+              sections = await loadEnvQuickSections(envResult);
           }
           
           const projects = config.projects || [];

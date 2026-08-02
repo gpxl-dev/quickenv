@@ -1,6 +1,6 @@
 # quickenv
 
-Manage monorepo `.env` files from one tagged source file.
+Manage monorepo `.env` files from one preset-based source file.
 
 ## Requirements
 
@@ -27,7 +27,7 @@ Entrypoints:
 ## Quick start
 
 ```bash
-# 1. Create quickenv.yaml, .quickenv/.env.quick, and .gitignore entries
+# 1. Create quickenv.yaml, .quickenv/.env.quick.yaml, and .gitignore entries
 bun run index.ts init
 
 # 2. Import existing .env* files, if any
@@ -44,49 +44,65 @@ bun run index.ts list
 `init` detects projects from package workspaces and `**/.env.example`. It creates:
 
 ```text
-quickenv.yaml        # committable metadata
-.quickenv/.env.quick # secret source file; gitignored
+quickenv.yaml             # committable metadata
+.quickenv/.env.quick.yaml # secret source file; gitignored
 ```
 
 `.quickenv/.quickenv.state` is created later by `switch` or worktree setup.
 
-## Mental model
+## Preset source: `.env.quick.yaml`
 
-1. Put all variables in `.quickenv/.env.quick`.
-2. Tag sections by preset and/or project.
-3. `switch` resolves the active preset and writes each project target file.
-4. `status` is the first troubleshooting command.
+The preferred source format is `.quickenv/.env.quick.yaml`. Its top-level keys are presets. A preset groups common variables, reusable shared values, and values for specific projects.
 
-Example `.quickenv/.env.quick`:
+```yaml
+base:
+  "*":
+    NODE_ENV: development
+    SOME_COMMON_VAR: foo
 
-```ini
-# Global variables apply everywhere
-NODE_ENV=development
+  shared:
+    DATABASE_URL: "postgres://localhost:5432/app"
+    HOSTNAME: localhost
 
-[local]
-API_URL=http://localhost:3000
-DEBUG=true
+  apps/api:
+    $shared:
+      - DATABASE_URL
+      - HOSTNAME
+    API_PORT: "3000"
 
-[production]
-API_URL=https://api.example.com
-# Empty value removes the variable
-DEBUG=
+  packages/logger:
+    LOG_LEVEL: debug
 
-[apps/api:local]
-DATABASE_URL=postgres://localhost:5432/api
+local:
+  extends: base
+  shared:
+    DATABASE_URL: "postgres://localhost:5432/app_local"
+
+production:
+  extends: local
+  apps/api:
+    HOSTNAME: api.example.com
 ```
 
-Resolution order, lowest to highest:
+The example uses these concepts:
 
-1. global untagged values
-2. project tags: `[apps/api]`
-3. preset tags: `[local]`
-4. wildcard combo tags: `[*:local]` or `[apps/api:*]`
-5. exact combo tags: `[apps/api:local]`
+- `"*"` contains common variables for all configured projects in that preset. `all` is an alias for `"*"`.
+- `shared` defines reusable values. It does not apply those values to every project by itself.
+- `$shared` under a project lists the shared values that the project pulls in.
+- A project path such as `apps/api` or `packages/logger` contains values for that project. Direct project values can override inherited or shared values, as `HOSTNAME` does in `production`.
+- `extends` inherits another preset before applying the child preset. Here, `local` inherits `base`, and `production` inherits the resulting `local` preset.
 
-Empty values and `UNSET` remove a variable.
+All YAML scalar values, including numbers, booleans, and `null`, become environment-variable strings. Empty strings and the exact string `UNSET` remove a variable.
+
+### Source precedence and legacy compatibility
+
+`.env.quick.yaml` takes precedence over `.env.quick`. When both `.quickenv/.env.quick.yaml` and `.quickenv/.env.quick` are available at the default source location, quickenv uses the YAML file. The legacy file remains a fallback for existing setups.
+
+See [Legacy `.env.quick` format](LEGACY_FORMAT.md) for the prior tagged format, its resolution order, and unset behavior.
 
 ## `quickenv.yaml`
+
+`quickenv.yaml` is separate from the secret source. It defines project targets, preset metadata, and output masking.
 
 ```yaml
 projects:
@@ -119,7 +135,7 @@ Target precedence, highest to lowest: `presets.<preset>.target`, `projects[].tar
 | Command | Purpose |
 | --- | --- |
 | `init` | Bootstrap config/source files in the current directory. Does not traverse upward. |
-| `scan [-y]` | Import discovered `.env*` files into config and `.env.quick`; respects `.gitignore`. |
+| `scan [-y]` | Import discovered `.env*` files into config and the source file; respects `.gitignore`. |
 | `status` | Show active preset, source files, projects, and available presets. |
 | `list [project]` / `show` | Show resolved variables for active preset. Matches project path, basename, or partial path. |
 | `list --suffix <preset>` | Preview another preset without switching. |
@@ -127,8 +143,8 @@ Target precedence, highest to lowest: `presets.<preset>.target`, `projects[].tar
 | `switch [preset]` | Write generated env files and save active preset. Prompts when omitted. |
 | `reload` | Re-run `switch` for the active preset. |
 | `set <key> [value]` | Temporarily update generated files for the active preset. Empty value removes. |
-| `set <key> [value] --persist [--preset <preset>]` | Append the value to the highest-precedence `.env.quick` source file. |
-| `edit` | Open a source `.env.quick` file in `$EDITOR`; prompts when multiple sources exist. |
+| `set <key> [value] --persist [--preset <preset>]` | Save the value to the highest-precedence source file. |
+| `edit` | Open a source file in `$EDITOR`; prompts when multiple sources exist. |
 | `reset` | Revert generated env files to the current source/active preset. |
 | `man` | Print detailed built-in reference. |
 | `worktree <branch>` | Create a Git worktree with quickenv setup. |
@@ -143,11 +159,11 @@ For every command except `init`, quickenv searches upward for the nearest `quick
 ```json
 {
   "activePreset": "local",
-  "envPath": ["../shared/.quickenv/.env.quick", ".quickenv/.env.quick"]
+  "envPath": ["../shared/.quickenv/.env.quick.yaml", ".quickenv/.env.quick.yaml"]
 }
 ```
 
-Later files override earlier files. Missing custom paths are ignored while any custom path exists; if none exist, quickenv falls back to `.quickenv/.env.quick` when it exists.
+Later files override earlier files. Missing custom paths are ignored while any custom path exists. If none exists, quickenv falls back to the default source location, where `.env.quick.yaml` takes precedence over the legacy `.env.quick` file.
 
 ## Worktrees
 
@@ -161,7 +177,7 @@ bun run scripts/create-worktree.ts feature/my-branch --path ../repo-feature
 Optional `.worktreeinclude` files are copied into the new worktree, for example:
 
 ```text
-.quickenv/.env.quick
+.quickenv/.env.quick.yaml
 .env.local
 ```
 

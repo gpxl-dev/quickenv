@@ -1,60 +1,104 @@
+import YAML, { isMap } from "yaml";
+
 export interface QuickEnvSection {
   tags: string[];
   variables: Record<string, string>;
 }
 
+export interface EnvQuickUpdate {
+  preset: string;
+  project?: string;
+  variables: Record<string, string>;
+}
+
+interface ProjectDefinition {
+  sharedKeys: string[];
+  variables: Record<string, string>;
+}
+
+interface PresetDefinition {
+  common: Record<string, string>;
+  shared: Record<string, string>;
+  projects: Map<string, ProjectDefinition>;
+}
+
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function scalarToString(value: unknown, path: string): string {
+  if (isRecord(value) || Array.isArray(value)) {
+    throw new Error(`${path} must be a scalar value.`);
+  }
+  return String(value);
+}
+
+function parseVariables(value: unknown, path: string): Record<string, string> {
+  if (!isRecord(value)) {
+    throw new Error(`${path} must be a mapping of variable names to scalar values.`);
+  }
+
+  const variables: Record<string, string> = {};
+  for (const [key, rawValue] of Object.entries(value)) {
+    variables[key] = scalarToString(rawValue, `${path}.${key}`);
+  }
+  return variables;
+}
+
+function clonePreset(preset?: PresetDefinition): PresetDefinition {
+  const projects = new Map<string, ProjectDefinition>();
+  for (const [name, project] of preset?.projects ?? []) {
+    projects.set(name, {
+      sharedKeys: [...project.sharedKeys],
+      variables: { ...project.variables },
+    });
+  }
+
+  return {
+    common: { ...preset?.common },
+    shared: { ...preset?.shared },
+    projects,
+  };
+}
+
+/** Parse the legacy tagged `.env.quick` format. */
 export function parseEnvQuick(content: string): QuickEnvSection[] {
   const lines = content.split(/\r?\n/);
   const sections: QuickEnvSection[] = [];
-  
+
   let currentTags: string[] = [];
   let currentVariables: Record<string, string> = {};
 
-  // Helper to push current section and reset
   const pushSection = () => {
     if (Object.keys(currentVariables).length > 0 || currentTags.length > 0) {
-       // If it's the global section (empty tags) and it's empty, we might skip it?
-       // But the tests expect it if there are variables.
-       // Actually, my test implementation expects separate sections for separate blocks.
-       // Let's just push what we have.
-       sections.push({
-         tags: currentTags,
-         variables: currentVariables
-       });
+      sections.push({
+        tags: currentTags,
+        variables: currentVariables,
+      });
     }
     currentVariables = {};
   };
 
-  // If the file starts with variables, they are global (empty tags).
-  // If we encounter a tag header, we finish the current section and start a new one.
-
   for (let line of lines) {
     line = line.trim();
 
-    // Skip empty lines and comments
     if (!line || line.startsWith("#")) {
       continue;
     }
 
-    // Check for section header [tag1, tag2]
     const headerMatch = line.match(/^\[(.*)\]$/);
     if (headerMatch) {
-      // If we have accumulated variables or if it's a previously defined tagged section (even if empty)
-      // we push it. We avoid pushing an empty global section at the start.
-      // Logic: If tags are NOT empty, we push (tagged section). 
-      // If tags ARE empty (global), we only push if variables are NOT empty.
-      
       if (currentTags.length > 0 || Object.keys(currentVariables).length > 0) {
-          pushSection();
+        pushSection();
       }
 
-      // Parse new tags
       const tagContent = headerMatch[1] || "";
-      currentTags = tagContent.split(",").map(t => t.trim()).filter(t => t);
+      currentTags = tagContent.split(",").map(tag => tag.trim()).filter(Boolean);
       continue;
     }
 
-    // Check for Variable
     const eqIndex = line.indexOf("=");
     if (eqIndex !== -1) {
       const key = line.substring(0, eqIndex).trim();
@@ -63,7 +107,6 @@ export function parseEnvQuick(content: string): QuickEnvSection[] {
     }
   }
 
-  // Push the last section
   if (Object.keys(currentVariables).length > 0 || currentTags.length > 0) {
     pushSection();
   }
@@ -71,23 +114,280 @@ export function parseEnvQuick(content: string): QuickEnvSection[] {
   return sections;
 }
 
+/**
+ * Parse the preset-centric `.env.quick.yaml` format into the shared resolver model.
+ * Presets inherit a complete definition. Shared imports are resolved after inheritance,
+ * so an inherited `$shared` usage sees values overridden by a child preset.
+ */
+function parseYamlRoot(content: string): UnknownRecord {
+  if (!content.trim()) return {};
+  const raw = YAML.parse(content) as unknown;
+  if (!isRecord(raw)) {
+    throw new Error(".env.quick.yaml must contain a top-level mapping of presets.");
+  }
+  return raw;
+}
+
+function mergeYamlMappings(base: UnknownRecord, overlay: UnknownRecord): UnknownRecord {
+  const merged: UnknownRecord = { ...base };
+  for (const [key, value] of Object.entries(overlay)) {
+    const previous = merged[key];
+    merged[key] = isRecord(previous) && isRecord(value)
+      ? mergeYamlMappings(previous, value)
+      : value;
+  }
+  return merged;
+}
+
+function parseEnvQuickYamlRoot(raw: UnknownRecord): QuickEnvSection[] {
+  const resolved = new Map<string, PresetDefinition>();
+  const resolving: string[] = [];
+
+  const resolvePreset = (presetName: string): PresetDefinition => {
+    const cached = resolved.get(presetName);
+    if (cached) return cached;
+
+    const cycleIndex = resolving.indexOf(presetName);
+    if (cycleIndex !== -1) {
+      const cycle = [...resolving.slice(cycleIndex), presetName].join(" -> ");
+      throw new Error(`Preset inheritance cycle: ${cycle}.`);
+    }
+
+    const rawPresetValue = raw[presetName];
+    const rawPreset = rawPresetValue === null ? {} : rawPresetValue;
+    if (!isRecord(rawPreset)) {
+      throw new Error(`Preset '${presetName}' must be a mapping.`);
+    }
+
+    resolving.push(presetName);
+    try {
+      let preset: PresetDefinition;
+      const parentName = rawPreset.extends;
+      if (parentName === undefined) {
+        preset = clonePreset();
+      } else {
+        if (typeof parentName !== "string" || !parentName) {
+          throw new Error(`Preset '${presetName}'.extends must name one preset.`);
+        }
+        if (!(parentName in raw)) {
+          throw new Error(`Preset '${presetName}' extends unknown preset '${parentName}'.`);
+        }
+        preset = clonePreset(resolvePreset(parentName));
+      }
+
+      for (const [key, value] of Object.entries(rawPreset)) {
+        if (key === "extends") continue;
+
+        if (key === "shared") {
+          Object.assign(preset.shared, parseVariables(value, `${presetName}.shared`));
+          continue;
+        }
+
+        if (key === "*" || key === "all") {
+          Object.assign(preset.common, parseVariables(value, `${presetName}.${key}`));
+          continue;
+        }
+
+        if (!isRecord(value)) {
+          throw new Error(`Project '${key}' in preset '${presetName}' must be a mapping.`);
+        }
+
+        const inherited = preset.projects.get(key);
+        const project: ProjectDefinition = {
+          sharedKeys: [...(inherited?.sharedKeys ?? [])],
+          variables: { ...inherited?.variables },
+        };
+
+        if ("$shared" in value) {
+          const imports = value.$shared;
+          if (!Array.isArray(imports) || imports.some(item => typeof item !== "string")) {
+            throw new Error(`${presetName}.${key}.$shared must be a list of shared variable names.`);
+          }
+          project.sharedKeys = [...imports] as string[];
+        }
+
+        for (const [variableName, rawValue] of Object.entries(value)) {
+          if (variableName === "$shared") continue;
+          project.variables[variableName] = scalarToString(
+            rawValue,
+            `${presetName}.${key}.${variableName}`,
+          );
+        }
+
+        preset.projects.set(key, project);
+      }
+
+      resolved.set(presetName, preset);
+      return preset;
+    } finally {
+      resolving.pop();
+    }
+  };
+
+  const sections: QuickEnvSection[] = [];
+  for (const presetName of Object.keys(raw)) {
+    const preset = resolvePreset(presetName);
+
+    // Keep every top-level key selectable, even when the preset has no common values.
+    sections.push({ tags: [presetName], variables: { ...preset.common } });
+
+    for (const [projectName, project] of preset.projects) {
+      const variables: Record<string, string> = {};
+      for (const sharedKey of project.sharedKeys) {
+        if (!(sharedKey in preset.shared)) {
+          throw new Error(
+            `Project '${projectName}' in preset '${presetName}' imports unknown shared variable '${sharedKey}'.`,
+          );
+        }
+        variables[sharedKey] = preset.shared[sharedKey]!;
+      }
+      Object.assign(variables, project.variables);
+      sections.push({ tags: [`${projectName}:${presetName}`], variables });
+    }
+  }
+
+  return sections;
+}
+
+export function parseEnvQuickYaml(content: string): QuickEnvSection[] {
+  return parseEnvQuickYamlRoot(parseYamlRoot(content));
+}
+
+/** Parse ordered YAML overlays before resolving inheritance and shared imports. */
+export function parseEnvQuickYamlSources(contents: string[]): QuickEnvSection[] {
+  let merged: UnknownRecord = {};
+  for (const content of contents) {
+    merged = mergeYamlMappings(merged, parseYamlRoot(content));
+  }
+  return parseEnvQuickYamlRoot(merged);
+}
+
+export function isEnvQuickYamlPath(path: string): boolean {
+  return /\.ya?ml$/i.test(path);
+}
+
+export function parseEnvQuickSource(content: string, path: string): QuickEnvSection[] {
+  return isEnvQuickYamlPath(path) ? parseEnvQuickYaml(content) : parseEnvQuick(content);
+}
+
 export function serializeEnvQuick(sections: QuickEnvSection[]): string {
   const lines: string[] = [];
-  
+
   for (const section of sections) {
-    // Add tag header if there are tags
     if (section.tags.length > 0) {
-      lines.push(`[${section.tags.join(', ')}]`);
+      lines.push(`[${section.tags.join(", ")}]`);
     }
-    
-    // Add variables
+
     for (const [key, value] of Object.entries(section.variables)) {
       lines.push(`${key}=${value}`);
     }
-    
-    // Add blank line between sections
-    lines.push('');
+
+    lines.push("");
   }
-  
-  return lines.join('\n');
+
+  return lines.join("\n");
+}
+
+function updateLegacyContent(
+  content: string,
+  updates: EnvQuickUpdate[],
+  onlyIfMissing: boolean,
+): string {
+  const sections = parseEnvQuick(content);
+  let changed = false;
+
+  for (const update of updates) {
+    const tag = update.project ? `${update.project}:${update.preset}` : update.preset;
+    let section = sections.find(candidate => candidate.tags.length === 1 && candidate.tags[0] === tag);
+    if (!section) {
+      section = { tags: [tag], variables: {} };
+      sections.push(section);
+    }
+
+    for (const [key, value] of Object.entries(update.variables)) {
+      if (!onlyIfMissing || !(key in section.variables)) {
+        if (section.variables[key] !== value) changed = true;
+        section.variables[key] = value;
+      }
+    }
+  }
+
+  return changed ? serializeEnvQuick(sections) : content;
+}
+
+function updateYamlContent(
+  content: string,
+  updates: EnvQuickUpdate[],
+  onlyIfMissing: boolean,
+  mergedEffectiveSections?: QuickEnvSection[],
+): string {
+  const document = YAML.parseDocument(content.trim() ? content : "{}");
+  if (document.errors.length > 0) {
+    throw document.errors[0];
+  }
+  const effectiveSections = onlyIfMissing
+    ? mergedEffectiveSections ?? parseEnvQuickYaml(content)
+    : [];
+  let changed = false;
+
+  const isEffectivelyDefined = (update: EnvQuickUpdate, key: string): boolean => {
+    const commonTag = update.preset;
+    const projectTag = update.project ? `${update.project}:${update.preset}` : undefined;
+    return effectiveSections.some(section =>
+      (section.tags[0] === commonTag || section.tags[0] === projectTag)
+      && key in section.variables
+    );
+  };
+
+  for (const update of updates) {
+    const entries = Object.entries(update.variables).filter(([key]) =>
+      !onlyIfMissing || !isEffectivelyDefined(update, key)
+    );
+    if (entries.length === 0) continue;
+
+    const presetValue = document.getIn([update.preset]);
+    const presetNode = document.getIn([update.preset], true);
+    if (presetValue === null || presetValue === undefined) {
+      document.delete(update.preset);
+      document.set(update.preset, document.createNode({}));
+    } else if (!isMap(presetNode)) {
+      throw new Error(`Preset '${update.preset}' must be a mapping.`);
+    }
+
+    let scopes: string[];
+    if (update.project) {
+      scopes = [update.project];
+    } else {
+      scopes = ["*", "all"].filter(scope => document.hasIn([update.preset, scope]));
+      if (scopes.length === 0) scopes = ["*"];
+    }
+
+    for (const [key, value] of entries) {
+      // When both aliases exist, keep direct persistent writes consistent in both.
+      const targetScopes = onlyIfMissing ? [scopes[scopes.length - 1]!] : scopes;
+      for (const scope of targetScopes) {
+        const path = [update.preset, scope, key];
+        if (document.getIn(path) !== value) changed = true;
+        document.setIn(path, value);
+      }
+    }
+  }
+
+  return changed ? document.toString() : content;
+}
+
+/** Structurally update either source format without corrupting YAML files. */
+export function updateEnvQuickContent(
+  content: string,
+  path: string,
+  updates: EnvQuickUpdate[],
+  options: {
+    onlyIfMissing?: boolean;
+    mergedEffectiveSections?: QuickEnvSection[];
+  } = {},
+): string {
+  const onlyIfMissing = options.onlyIfMissing ?? false;
+  return isEnvQuickYamlPath(path)
+    ? updateYamlContent(content, updates, onlyIfMissing, options.mergedEffectiveSections)
+    : updateLegacyContent(content, updates, onlyIfMissing);
 }

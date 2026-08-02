@@ -1,7 +1,13 @@
 import { z } from "zod";
 import YAML from "yaml";
 import { join, isAbsolute, dirname } from "path";
-import { parseEnvQuick, type QuickEnvSection, serializeEnvQuick } from "./parser";
+import {
+  isEnvQuickYamlPath,
+  parseEnvQuickSource,
+  parseEnvQuickYamlSources,
+  type QuickEnvSection,
+  serializeEnvQuick,
+} from "./parser";
 
 const ConfigSchema = z.object({
   projects: z.array(z.union([
@@ -52,7 +58,14 @@ export async function resolveEnvQuickPath(statePath = DEFAULT_STATE_PATH): Promi
     ? statePath.slice(0, -".quickenv/.quickenv.state".length)
     : dirname(statePath);
   
-  const defaultPath = join(baseDir, ".quickenv/.env.quick");
+  const defaultYamlPath = join(baseDir, ".quickenv/.env.quick.yaml");
+  const defaultLegacyPath = join(baseDir, ".quickenv/.env.quick");
+
+  const resolveDefaultPath = async (): Promise<string> => {
+    if (await Bun.file(defaultYamlPath).exists()) return defaultYamlPath;
+    if (await Bun.file(defaultLegacyPath).exists()) return defaultLegacyPath;
+    return defaultYamlPath;
+  };
   
   if (state.envPath) {
     // Normalize envPath to an array
@@ -78,41 +91,46 @@ export async function resolveEnvQuickPath(statePath = DEFAULT_STATE_PATH): Promi
       };
     }
     
-    // Custom paths don't exist, fall back to default
-    const defaultFile = Bun.file(defaultPath);
-    if (await defaultFile.exists()) {
-      return { 
-        path: defaultPath, 
+    // Custom paths don't exist, fall back to the preferred default source.
+    const defaultPath = await resolveDefaultPath();
+    if (await Bun.file(defaultPath).exists()) {
+      return {
+        path: defaultPath,
         paths: [defaultPath],
-        isCustom: false, 
-        fallbackFrom: resolvedPaths[0] 
+        isCustom: false,
+        fallbackFrom: resolvedPaths[0]
       };
     }
-    
-    // Neither exists - return first custom path for error reporting
-    return { 
-      path: resolvedPaths[0]!, 
-      paths: resolvedPaths,
-      isCustom: true 
+
+    // Neither exists - return the preferred YAML path so init and errors agree.
+    return {
+      path: defaultPath,
+      paths: [defaultPath],
+      isCustom: false,
+      fallbackFrom: resolvedPaths[0]
     };
   }
 
-  // Default location is .quickenv/.env.quick relative to the base directory
+  const defaultPath = await resolveDefaultPath();
   return { path: defaultPath, paths: [defaultPath], isCustom: false };
 }
 
-// Load and merge multiple env.quick files, with later files taking precedence
-export async function loadMergedEnvQuick(envResult: EnvPathResult): Promise<string> {
-  if (envResult.paths.length === 1) {
-    return await Bun.file(envResult.paths[0]!).text();
-  }
-  
-  // Merge multiple files - later files override earlier ones
+// Load and merge source files, with later files taking precedence.
+export async function loadEnvQuickSections(envResult: EnvPathResult): Promise<QuickEnvSection[]> {
   const sectionsMap = new Map<string, Map<string, string>>();
-  
-  for (const path of envResult.paths) {
-    const content = await Bun.file(path).text();
-    const sections = parseEnvQuick(content);
+  const sources = await Promise.all(envResult.paths.map(async path => ({
+    path,
+    content: await Bun.file(path).text(),
+  })));
+
+  // YAML sources are semantic overlays. Merge them before inheritance and shared
+  // imports are resolved so later shared values flow through inherited usages.
+  if (sources.length > 0 && sources.every(source => isEnvQuickYamlPath(source.path))) {
+    return parseEnvQuickYamlSources(sources.map(source => source.content));
+  }
+
+  for (const { path, content } of sources) {
+    const sections = parseEnvQuickSource(content, path);
     
     for (const section of sections) {
       const tagKey = section.tags.join(',');
@@ -128,7 +146,6 @@ export async function loadMergedEnvQuick(envResult: EnvPathResult): Promise<stri
     }
   }
   
-  // Rebuild the merged content
   const mergedSections: QuickEnvSection[] = [];
   for (const [tagKey, varMap] of sectionsMap) {
     const tags = tagKey ? tagKey.split(',') : [];
@@ -138,9 +155,13 @@ export async function loadMergedEnvQuick(envResult: EnvPathResult): Promise<stri
     }
     mergedSections.push({ tags, variables });
   }
-  
-  // Serialize back to string format
-  return serializeEnvQuick(mergedSections);
+
+  return mergedSections;
+}
+
+/** Legacy-compatible text loader. New code should use loadEnvQuickSections. */
+export async function loadMergedEnvQuick(envResult: EnvPathResult): Promise<string> {
+  return serializeEnvQuick(await loadEnvQuickSections(envResult));
 }
 
 export async function loadConfig(path = "quickenv.yaml"): Promise<Config | null> {

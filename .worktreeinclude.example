@@ -3,7 +3,7 @@
 # Uses glob patterns (similar to .gitignore syntax)
 
 # Shared environment file (will be linked via envPath in .quickenv/.quickenv.state)
-.quickenv/.env.quick
+.quickenv/.env.quick.yaml
 
 # Additional shared files you might want:
 # .envrc
