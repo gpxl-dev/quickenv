@@ -1,9 +1,25 @@
 #!/usr/bin/env bun
 import { Command } from "commander";
 import * as p from "@clack/prompts";
-import ignore from "ignore";
-import { join, relative, dirname, basename } from "path";
+import { chmod, mkdir, open } from "node:fs/promises";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "path";
 import { $ } from "bun";
+import {
+  loadEnvQuickSections,
+  loadState,
+  resolveEnvQuickPath,
+  saveState,
+} from "../src/core/config";
+import {
+  createYamlPresetContent,
+  getPresetNames,
+  getYamlPresetNames,
+  isEnvQuickYamlPath,
+} from "../src/core/parser";
+import { performSwitch } from "../src/commands/switch";
+
+const WORKTREE_PRESET_SOURCE = ".quickenv/.env.worktree.yaml";
+const NO_PARENT_PRESET = "__no_parent_preset__";
 
 interface WorktreeOptions {
   branch?: string;
@@ -11,13 +27,253 @@ interface WorktreeOptions {
   from?: string;
 }
 
-async function findGitRoot(cwd: string): Promise<string> {
-  const result = await $`cd ${cwd} && git rev-parse --show-toplevel`.quiet();
-  return result.text().trim();
+type WorktreeState = {
+  activePreset?: string;
+  envPath?: string | string[];
+  isProtected?: boolean;
+};
+
+type PresetSource = {
+  path: string;
+  label: string;
+  presetNames: string[];
+};
+
+function sanitizeName(value: string): string {
+  return value
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 255);
 }
 
-async function getCurrentBranch(cwd: string): Promise<string> {
-  const result = await $`cd ${cwd} && git rev-parse --abbrev-ref HEAD`.quiet();
+function resolveFromRoot(rootDir: string, path: string): string {
+  return isAbsolute(path) ? path : resolve(rootDir, path);
+}
+
+export function addWorktreeSourceToState(
+  state: WorktreeState,
+  rootDir: string,
+  sourcePath: string,
+  fallbackSourcePaths: string[] = [],
+): WorktreeState {
+  const configuredPaths = state.envPath
+    ? Array.isArray(state.envPath)
+      ? [...state.envPath]
+      : [state.envPath]
+    : fallbackSourcePaths.map((path) => relative(rootDir, path));
+  const sourceAbsolutePath = resolveFromRoot(rootDir, sourcePath);
+
+  if (
+    !configuredPaths.some(
+      (path) => resolveFromRoot(rootDir, path) === sourceAbsolutePath,
+    )
+  ) {
+    configuredPaths.push(sourcePath);
+  }
+
+  return { ...state, envPath: configuredPaths };
+}
+
+async function writeSecretFile(path: string, content: string): Promise<void> {
+  let handle;
+  try {
+    handle = await open(path, "wx", 0o600);
+  } catch (error: unknown) {
+    if (
+      typeof error !== "object" ||
+      error === null ||
+      !("code" in error) ||
+      error.code !== "EEXIST"
+    ) {
+      throw error;
+    }
+    await chmod(path, 0o600);
+    handle = await open(path, "w");
+  }
+
+  try {
+    await handle.writeFile(content);
+  } finally {
+    await handle.close();
+  }
+}
+
+export async function createPresetInSource(
+  sourcePath: string,
+  presetName: string,
+  parentPreset?: string,
+): Promise<void> {
+  const file = Bun.file(sourcePath);
+  const exists = await file.exists();
+  const content = exists ? await file.text() : "";
+  const updatedContent = createYamlPresetContent(
+    content,
+    presetName,
+    parentPreset,
+  );
+
+  await mkdir(dirname(sourcePath), { recursive: true });
+  if (exists) {
+    await Bun.write(sourcePath, updatedContent);
+  } else {
+    await writeSecretFile(sourcePath, updatedContent);
+  }
+}
+
+async function configureWorktreePreset(
+  worktreePath: string,
+  branch: string,
+): Promise<string | undefined> {
+  const statePath = join(worktreePath, ".quickenv/.quickenv.state");
+  const state = (await loadState(statePath)) as WorktreeState;
+  const envResult = await resolveEnvQuickPath(statePath);
+  const existingPaths: string[] = [];
+  for (const path of envResult.paths) {
+    if (await Bun.file(path).exists()) existingPaths.push(path);
+  }
+
+  const sections =
+    existingPaths.length > 0
+      ? await loadEnvQuickSections({
+          ...envResult,
+          path: existingPaths[existingPaths.length - 1]!,
+          paths: existingPaths,
+        })
+      : [];
+  const presetNames = getPresetNames(sections);
+  const mode = await p.select({
+    message: "How should Quickenv configure this worktree?",
+    options: [
+      ...(presetNames.length > 0
+        ? [{ value: "existing", label: "Use an existing preset" }]
+        : []),
+      { value: "new", label: "Create a new preset" },
+      { value: "skip", label: "Skip Quickenv preset setup" },
+    ],
+  });
+
+  if (p.isCancel(mode) || mode === "skip") {
+    p.log.info("Skipped Quickenv preset setup");
+    return undefined;
+  }
+
+  let presetName: string;
+  if (mode === "existing") {
+    const selected = await p.select({
+      message: "Which preset should this worktree use?",
+      options: presetNames.map((name) => ({ value: name, label: name })),
+    });
+    if (p.isCancel(selected)) {
+      p.log.info("Skipped Quickenv preset setup");
+      return undefined;
+    }
+    presetName = selected;
+  } else {
+    const enteredName = await p.text({
+      message: "Name for the new preset:",
+      initialValue: sanitizeName(`worktree-${branch}`),
+      validate: (value) => {
+        const name = value.trim();
+        if (!name) return "Enter a preset name.";
+        if (presetNames.includes(name)) {
+          return "That preset already exists. Choose another name.";
+        }
+      },
+    });
+    if (p.isCancel(enteredName)) {
+      p.log.info("Skipped Quickenv preset setup");
+      return undefined;
+    }
+    presetName = enteredName.trim();
+
+    const localSourcePath = join(worktreePath, WORKTREE_PRESET_SOURCE);
+    const yamlSources: PresetSource[] = [];
+    for (const path of existingPaths) {
+      if (!isEnvQuickYamlPath(path)) continue;
+      yamlSources.push({
+        path,
+        label: relative(worktreePath, path) || basename(path),
+        presetNames: getYamlPresetNames(await Bun.file(path).text()),
+      });
+    }
+
+    const sourceSelection = await p.select({
+      message: "Which source file should contain the new preset?",
+      options: [
+        ...yamlSources
+          .filter((source) => resolve(source.path) !== resolve(localSourcePath))
+          .map((source) => ({
+            value: source.path,
+            label: `${source.label} (${source.presetNames.length} preset${source.presetNames.length === 1 ? "" : "s"})`,
+          })),
+        {
+          value: localSourcePath,
+          label: `${(await Bun.file(localSourcePath).exists()) ? "Use" : "Create"} ${WORKTREE_PRESET_SOURCE} for this worktree only`,
+        },
+      ],
+    });
+    if (p.isCancel(sourceSelection)) {
+      p.log.info("Skipped Quickenv preset setup");
+      return undefined;
+    }
+
+    const selectedSource =
+      yamlSources.find(
+        (source) => resolve(source.path) === resolve(sourceSelection),
+      ) ?? {
+        path: sourceSelection,
+        label: WORKTREE_PRESET_SOURCE,
+        presetNames: [],
+      };
+    const allSourcesAreYaml = existingPaths.every(isEnvQuickYamlPath);
+    const availableParents = allSourcesAreYaml
+      ? presetNames
+      : selectedSource.presetNames;
+    const parentSelection = await p.select({
+      message: "Which preset should the new preset extend?",
+      options: [
+        ...availableParents.map((name) => ({ value: name, label: name })),
+        { value: NO_PARENT_PRESET, label: "Do not extend a preset" },
+      ],
+    });
+    if (p.isCancel(parentSelection)) {
+      p.log.info("Skipped Quickenv preset setup");
+      return undefined;
+    }
+
+    await createPresetInSource(
+      selectedSource.path,
+      presetName,
+      parentSelection === NO_PARENT_PRESET ? undefined : parentSelection,
+    );
+
+    if (resolve(selectedSource.path) === resolve(localSourcePath)) {
+      await saveState(
+        addWorktreeSourceToState(
+          state,
+          worktreePath,
+          WORKTREE_PRESET_SOURCE,
+          existingPaths,
+        ),
+        statePath,
+      );
+    }
+  }
+
+  await performSwitch(presetName, worktreePath);
+  const activeState = await loadState(statePath);
+  if (activeState.activePreset !== presetName) {
+    p.log.warn(`Quickenv preset '${presetName}' was not activated`);
+    return undefined;
+  }
+
+  p.log.success(`Configured Quickenv preset '${presetName}'`);
+  return presetName;
+}
+
+async function findGitRoot(cwd: string): Promise<string> {
+  const result = await $`cd ${cwd} && git rev-parse --show-toplevel`.quiet();
   return result.text().trim();
 }
 
@@ -79,10 +335,25 @@ async function copyWorktreeIncludeFiles(
   return copied;
 }
 
+export function buildPostWorktreeHookEnv(
+  worktreePath: string,
+  branch: string,
+  preset?: string,
+  baseEnv: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  return {
+    ...baseEnv,
+    WORKTREE_PATH: worktreePath,
+    BRANCH_NAME: branch,
+    ...(preset ? { QUICKENV_PRESET: preset } : {}),
+  };
+}
+
 async function runPostWorktreeHook(
   mainWorktree: string,
   worktreePath: string,
-  branch: string
+  branch: string,
+  preset?: string,
 ): Promise<void> {
   const hooksDir = join(mainWorktree, ".quickenv/hooks");
   const tsHook = join(hooksDir, "post-worktree.ts");
@@ -111,17 +382,14 @@ async function runPostWorktreeHook(
   p.log.step("Running post-worktree hook...");
 
   try {
-    const env = {
-      ...process.env,
-      WORKTREE_PATH: worktreePath,
-      BRANCH_NAME: branch,
-    };
+    const env = buildPostWorktreeHookEnv(worktreePath, branch, preset);
 
     if (hookType === "ts") {
       // Run TypeScript hook with bun from the new worktree directory
       const proc = Bun.spawn(["bun", hookPath], {
         cwd: worktreePath,
         env,
+        stdin: "inherit",
         stdout: "inherit",
         stderr: "inherit",
       });
@@ -136,6 +404,7 @@ async function runPostWorktreeHook(
       const proc = Bun.spawn(["sh", hookPath], {
         cwd: worktreePath,
         env,
+        stdin: "inherit",
         stdout: "inherit",
         stderr: "inherit",
       });
@@ -159,7 +428,6 @@ async function createWorktree(branchArg: string | WorktreeOptions, opts?: Worktr
   p.intro("quickenv worktree");
 
   const mainWorktree = await findGitRoot(process.cwd());
-  const currentBranch = await getCurrentBranch(mainWorktree);
 
   // Get or prompt for branch name
   let branch = branchFromArg || options.branch;
@@ -280,17 +548,19 @@ async function createWorktree(branchArg: string | WorktreeOptions, opts?: Worktr
   }
 
   // Create the state file (may be empty if no envPath found)
+  await mkdir(dirname(statePath), { recursive: true });
   await Bun.write(statePath, JSON.stringify(newState, null, 2));
   p.log.success("Created .quickenv.state");
 
+  const preset = await configureWorktreePreset(worktreePath, branch);
+
   // Run post-worktree hook if it exists
-  await runPostWorktreeHook(mainWorktree, worktreePath, branch);
+  await runPostWorktreeHook(mainWorktree, worktreePath, branch, preset);
 
   // Summary
   p.outro("Worktree created successfully!");
-  console.log("\nNext steps:");
+  console.log("\nNext step:");
   console.log(`  cd ${relative(process.cwd(), worktreePath)}`);
-  console.log("  quickenv switch <preset>");
 }
 
 export const worktreeCommand = new Command("worktree")

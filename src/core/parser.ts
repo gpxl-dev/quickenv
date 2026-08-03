@@ -11,6 +11,17 @@ export interface EnvQuickUpdate {
   variables: Record<string, string>;
 }
 
+export function getPresetNames(sections: QuickEnvSection[]): string[] {
+  const presets = new Set<string>();
+  for (const section of sections) {
+    for (const tag of section.tags) {
+      const separatorIndex = tag.lastIndexOf(":");
+      presets.add(separatorIndex === -1 ? tag : tag.slice(separatorIndex + 1));
+    }
+  }
+  return [...presets].filter(Boolean).sort((left, right) => left.localeCompare(right));
+}
+
 interface ProjectDefinition {
   sharedKeys: string[];
   variables: Record<string, string>;
@@ -264,6 +275,33 @@ export function parseEnvQuickYamlSources(contents: string[]): QuickEnvSection[] 
 
 export function isEnvQuickYamlPath(path: string): boolean {
   return /\.ya?ml$/i.test(path);
+}
+
+export function getYamlPresetNames(content: string): string[] {
+  return Object.keys(parseYamlRoot(content)).sort((left, right) =>
+    left.localeCompare(right),
+  );
+}
+
+export function createYamlPresetContent(
+  content: string,
+  presetName: string,
+  parentPreset?: string,
+): string {
+  const name = presetName.trim();
+  if (!name) throw new Error("Preset name cannot be empty.");
+
+  const document = YAML.parseDocument(content.trim() ? content : "{}");
+  if (document.errors.length > 0) throw document.errors[0];
+  if (!isMap(document.contents)) {
+    throw new Error(".env.quick.yaml must contain a top-level mapping of presets.");
+  }
+  if (document.has(name)) {
+    throw new Error(`Preset '${name}' already exists.`);
+  }
+
+  document.set(name, document.createNode(parentPreset ? { extends: parentPreset } : {}));
+  return document.toString();
 }
 
 export function parseEnvQuickSource(content: string, path: string): QuickEnvSection[] {

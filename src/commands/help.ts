@@ -89,8 +89,8 @@ ${b("Worktrees")}
   quickenv worktree feature/my-branch
   quickenv-worktree feature/my-branch --path ../repo-feature
 
-  Optional .worktreeinclude entries are copied. Optional hooks run from
-  .quickenv/hooks/post-worktree.ts or .quickenv/hooks/post-worktree.sh with
-  WORKTREE_PATH and BRANCH_NAME.
+  Optional .worktreeinclude entries are copied. Select an existing preset or
+  create one in an existing YAML source or a worktree-local source. Optional
+  hooks run after activation with WORKTREE_PATH, BRANCH_NAME, and QUICKENV_PRESET.
 `);
   });

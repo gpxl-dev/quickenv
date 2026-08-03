@@ -1,21 +1,9 @@
 import { Command } from "commander";
 import * as p from "@clack/prompts";
 import { loadConfig, loadState, saveState, resolveEnvQuickPath, loadEnvQuickSections } from "../core/config";
-import type { QuickEnvSection } from "../core/parser";
+import { getPresetNames } from "../core/parser";
 import { resolveEnv } from "../core/resolver";
 import { join } from "path";
-
-function getPresets(sections: QuickEnvSection[]): string[] {
-    const presets = new Set<string>();
-    for (const s of sections) {
-        for (const t of s.tags) {
-            const parts = t.split(':');
-            const presetName = parts.length > 1 ? parts[1]! : parts[0]!;
-            presets.add(presetName);
-        }
-    }
-    return Array.from(presets).sort();
-}
 
 export async function performSwitch(preset: string, rootDir: string = process.cwd()) {
     const configPath = join(rootDir, "quickenv.yaml");
@@ -115,7 +103,7 @@ export const switchCommand = new Command("switch")
                 process.exit(1);
             }
             const sections = await loadEnvQuickSections(envResult);
-            const presets = getPresets(sections);
+            const presets = getPresetNames(sections);
             
             if (presets.length === 0) {
                 console.error("No presets found in the environment source.");

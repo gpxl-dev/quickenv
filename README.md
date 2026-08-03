@@ -183,14 +183,16 @@ Optional `.worktreeinclude` files are copied into the new worktree, for example:
 
 The helper creates `.quickenv/.quickenv.state` in the new worktree. If the source worktree state has `envPath`, it copies that setting so the new worktree can share the same source files.
 
-Optional hooks run after creation:
+Worktree setup then lets you use an existing preset, create a new preset, or skip preset setup. For a new preset, select an existing YAML source or create `.quickenv/.env.worktree.yaml` for that worktree only, then optionally select a parent preset. Quickenv activates the selected preset before it runs the post-worktree hook.
+
+Optional hooks run after preset setup:
 
 ```text
 .quickenv/hooks/post-worktree.ts  # preferred, runs with Bun
 .quickenv/hooks/post-worktree.sh
 ```
 
-Hook env vars: `WORKTREE_PATH`, `BRANCH_NAME`. Hook failure warns but does not undo the worktree.
+Hook env vars: `WORKTREE_PATH`, `BRANCH_NAME`, and `QUICKENV_PRESET` when preset setup completed. Hook failure warns but does not undo the worktree or preset changes.
 
 ## Security
 

@@ -1,5 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import {
+  createYamlPresetContent,
+  getPresetNames,
   parseEnvQuick,
   parseEnvQuickYaml,
   parseEnvQuickYamlSources,
@@ -209,6 +211,46 @@ child:
       .toThrow("Preset inheritance cycle: a -> b -> a.");
     expect(() => parseEnvQuickYaml(`local:\n  app:\n    $shared: [MISSING]`))
       .toThrow("imports unknown shared variable 'MISSING'");
+  });
+});
+
+describe("preset helpers", () => {
+  it("extracts unique preset names from common and project sections", () => {
+    expect(
+      getPresetNames([
+        { tags: ["base"], variables: {} },
+        { tags: ["apps/api:local"], variables: {} },
+        { tags: ["local"], variables: {} },
+      ]),
+    ).toEqual(["base", "local"]);
+  });
+
+  it("creates an inherited YAML preset without removing comments", () => {
+    const result = createYamlPresetContent(
+      "# keep me\nbase:\n  '*':\n    NODE_ENV: development\n",
+      "worktree-feature",
+      "base",
+    );
+
+    expect(result).toContain("# keep me");
+    expect(parseEnvQuickYaml(result).map((section) => section.tags)).toEqual([
+      ["base"],
+      ["worktree-feature"],
+    ]);
+    expect(result).toContain("extends: base");
+  });
+
+  it("creates a standalone preset in an empty YAML source", () => {
+    const result = createYamlPresetContent("", "local");
+    expect(parseEnvQuickYaml(result)).toEqual([
+      { tags: ["local"], variables: {} },
+    ]);
+  });
+
+  it("refuses to overwrite an existing preset", () => {
+    expect(() => createYamlPresetContent("local: {}\n", "local")).toThrow(
+      "Preset 'local' already exists",
+    );
   });
 });
 

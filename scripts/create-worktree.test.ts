@@ -1,8 +1,20 @@
 import { test, expect, describe, beforeAll, afterAll } from "bun:test";
 import { $ } from "bun";
 import { join, basename } from "path";
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from "fs";
+import {
+  mkdtempSync,
+  writeFileSync,
+  mkdirSync,
+  rmSync,
+  readFileSync,
+  statSync,
+} from "fs";
 import { tmpdir } from "os";
+import {
+  addWorktreeSourceToState,
+  buildPostWorktreeHookEnv,
+  createPresetInSource,
+} from "./create-worktree";
 
 describe("create-worktree hooks", () => {
   let tempDir: string;
@@ -104,6 +116,70 @@ echo "Hook ran for branch: $BRANCH_NAME" > "$WORKTREE_PATH/hook-sh-ran.txt"
     const shFile = Bun.file(join(hooksDir, "post-worktree.sh"));
     expect(await tsFile.exists()).toBe(true);
     expect(await shFile.exists()).toBe(true);
+  });
+
+  test("passes the configured preset to post-worktree hooks", () => {
+    expect(
+      buildPostWorktreeHookEnv("/tmp/repo-feature", "feature", "local", {
+        PATH: "/bin",
+      }),
+    ).toEqual({
+      PATH: "/bin",
+      WORKTREE_PATH: "/tmp/repo-feature",
+      BRANCH_NAME: "feature",
+      QUICKENV_PRESET: "local",
+    });
+  });
+});
+
+describe("create-worktree preset setup", () => {
+  let tempDir: string;
+
+  beforeAll(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "quickenv_preset_test_"));
+  });
+
+  afterAll(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  test("adds a local preset source after existing fallback sources", () => {
+    const rootDir = join(tempDir, "repo");
+    const sharedSource = join(tempDir, "shared", ".env.quick.yaml");
+    expect(
+      addWorktreeSourceToState(
+        {},
+        rootDir,
+        ".quickenv/.env.worktree.yaml",
+        [sharedSource],
+      ),
+    ).toEqual({
+      envPath: ["../shared/.env.quick.yaml", ".quickenv/.env.worktree.yaml"],
+    });
+  });
+
+  test("creates an inherited preset source with private permissions", async () => {
+    const sourcePath = join(tempDir, "new-worktree", ".quickenv", ".env.worktree.yaml");
+    await createPresetInSource(sourcePath, "feature", "base");
+
+    expect(Bun.YAML.parse(readFileSync(sourcePath, "utf8"))).toEqual({
+      feature: { extends: "base" },
+    });
+    expect(statSync(sourcePath).mode & 0o777).toBe(0o600);
+  });
+
+  test("appends a preset without removing existing source comments", async () => {
+    const sourcePath = join(tempDir, "shared.env.quick.yaml");
+    writeFileSync(sourcePath, "# keep me\nbase: {}\n");
+
+    await createPresetInSource(sourcePath, "feature", "base");
+
+    const content = readFileSync(sourcePath, "utf8");
+    expect(content).toContain("# keep me");
+    expect(Bun.YAML.parse(content)).toEqual({
+      base: {},
+      feature: { extends: "base" },
+    });
   });
 });
 
