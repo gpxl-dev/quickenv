@@ -14,7 +14,16 @@ import {
   addWorktreeSourceToState,
   buildPostWorktreeHookEnv,
   createPresetInSource,
+  getDefaultWorktreePath,
 } from "./create-worktree";
+
+describe("create-worktree path", () => {
+  test("uses a sibling directory and replaces branch slashes", () => {
+    expect(
+      getDefaultWorktreePath("/tmp/quickenv", "feature/new-command"),
+    ).toBe("/tmp/quickenv-feature-new-command");
+  });
+});
 
 describe("create-worktree hooks", () => {
   let tempDir: string;

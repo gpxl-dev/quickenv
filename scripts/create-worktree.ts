@@ -335,6 +335,16 @@ async function copyWorktreeIncludeFiles(
   return copied;
 }
 
+export function getDefaultWorktreePath(
+  mainWorktree: string,
+  branch: string,
+): string {
+  return join(
+    dirname(mainWorktree),
+    `${basename(mainWorktree)}-${branch.replace(/\//g, "-")}`,
+  );
+}
+
 export function buildPostWorktreeHookEnv(
   worktreePath: string,
   branch: string,
@@ -447,10 +457,20 @@ async function createWorktree(branchArg: string | WorktreeOptions, opts?: Worktr
   // Determine worktree path
   let worktreePath = options.path;
   if (!worktreePath) {
-    // Default to sibling directory
-    const parentDir = dirname(mainWorktree);
-    const baseName = basename(mainWorktree);
-    worktreePath = join(parentDir, `${baseName}-${branch.replace(/\//g, "-")}`);
+    const defaultPath = getDefaultWorktreePath(mainWorktree, branch);
+    const input = await p.text({
+      message: "Worktree directory:",
+      initialValue: defaultPath,
+      validate: (value) => {
+        if (!value.trim()) return "Enter a worktree directory.";
+      },
+    });
+
+    if (p.isCancel(input)) {
+      p.outro("Cancelled");
+      process.exit(0);
+    }
+    worktreePath = input.trim();
   }
 
   // Check if worktree already exists
