@@ -158,6 +158,93 @@ production:
     });
   });
 
+  it("inherits from comma-separated parents from left to right", () => {
+    const sections = parseEnvQuickYaml(`
+privy:
+  "*":
+    PRIVY_APP_ID: privy-app
+    SHARED_VALUE: privy
+  shared:
+    API_KEY: privy-key
+  app:
+    $shared: [API_KEY]
+    FROM_PRIVY: yes
+
+database:
+  "*":
+    DATABASE_URL: postgres://production
+    SHARED_VALUE: database
+  shared:
+    API_KEY: database-key
+  app:
+    FROM_DATABASE: yes
+
+production:
+  extends: privy, database
+  "*":
+    SHARED_VALUE: production
+`);
+
+    expect(sections.find(section => section.tags[0] === "production")?.variables).toEqual({
+      PRIVY_APP_ID: "privy-app",
+      DATABASE_URL: "postgres://production",
+      SHARED_VALUE: "production",
+    });
+    expect(sections.find(section => section.tags[0] === "app:production")?.variables).toEqual({
+      API_KEY: "database-key",
+      FROM_PRIVY: "yes",
+      FROM_DATABASE: "yes",
+    });
+  });
+
+  it("lets a later parent replace an earlier parent's shared import list", () => {
+    const sections = parseEnvQuickYaml(`
+first:
+  shared: { ONE: one, TWO: two }
+  app:
+    $shared: [ONE]
+second:
+  shared: { ONE: one, TWO: two }
+  app:
+    $shared: [TWO]
+combined:
+  extends: first, second
+`);
+
+    expect(sections.find(section => section.tags[0] === "app:combined")?.variables).toEqual({
+      TWO: "two",
+    });
+  });
+
+  it("preserves inheritance from an existing preset whose name contains a comma", () => {
+    const sections = parseEnvQuickYaml(`
+"base,legacy":
+  "*": { VALUE: inherited }
+child:
+  extends: base,legacy
+`);
+
+    expect(sections.find(section => section.tags[0] === "child")?.variables).toEqual({
+      VALUE: "inherited",
+    });
+  });
+
+  it("accepts a YAML list of parent presets", () => {
+    const sections = parseEnvQuickYaml(`
+first:
+  "*": { FIRST: one }
+second:
+  "*": { SECOND: two }
+combined:
+  extends: [first, second]
+`);
+
+    expect(sections.find(section => section.tags[0] === "combined")?.variables).toEqual({
+      FIRST: "one",
+      SECOND: "two",
+    });
+  });
+
   it("accepts all as an alias for the common project scope", () => {
     const sections = parseEnvQuickYaml(`
 local:
@@ -206,9 +293,15 @@ child:
     });
   });
 
-  it("rejects inheritance cycles and unknown shared imports", () => {
-    expect(() => parseEnvQuickYaml(`a: { extends: b }\nb: { extends: a }`))
-      .toThrow("Preset inheritance cycle: a -> b -> a.");
+  it("rejects inheritance cycles, invalid parents, and unknown shared imports", () => {
+    expect(() => parseEnvQuickYaml(`a:\n  extends: b, c\nb: {}\nc: { extends: a }`))
+      .toThrow("Preset inheritance cycle: a -> c -> a.");
+    expect(() => parseEnvQuickYaml(`local: { extends: [] }`))
+      .toThrow("Preset 'local'.extends must name one or more presets.");
+    expect(() => parseEnvQuickYaml(`local: { extends: [base, 2] }\nbase: {}`))
+      .toThrow("Preset 'local'.extends must be a preset name or a list of preset names.");
+    expect(() => parseEnvQuickYaml(`local:\n  extends: missing`))
+      .toThrow("Preset 'local' extends unknown preset 'missing'.");
     expect(() => parseEnvQuickYaml(`local:\n  app:\n    $shared: [MISSING]`))
       .toThrow("imports unknown shared variable 'MISSING'");
   });

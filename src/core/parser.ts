@@ -24,6 +24,7 @@ export function getPresetNames(sections: QuickEnvSection[]): string[] {
 
 interface ProjectDefinition {
   sharedKeys: string[];
+  sharedKeysDefined: boolean;
   variables: Record<string, string>;
 }
 
@@ -63,6 +64,7 @@ function clonePreset(preset?: PresetDefinition): PresetDefinition {
   for (const [name, project] of preset?.projects ?? []) {
     projects.set(name, {
       sharedKeys: [...project.sharedKeys],
+      sharedKeysDefined: project.sharedKeysDefined,
       variables: { ...project.variables },
     });
   }
@@ -72,6 +74,54 @@ function clonePreset(preset?: PresetDefinition): PresetDefinition {
     shared: { ...preset?.shared },
     projects,
   };
+}
+
+function mergePreset(base: PresetDefinition, overlay: PresetDefinition): PresetDefinition {
+  const merged = clonePreset(base);
+  Object.assign(merged.common, overlay.common);
+  Object.assign(merged.shared, overlay.shared);
+
+  for (const [name, project] of overlay.projects) {
+    const inherited = merged.projects.get(name);
+    merged.projects.set(name, {
+      sharedKeys: project.sharedKeysDefined
+        ? [...project.sharedKeys]
+        : [...(inherited?.sharedKeys ?? [])],
+      sharedKeysDefined: project.sharedKeysDefined || (inherited?.sharedKeysDefined ?? false),
+      variables: { ...inherited?.variables, ...project.variables },
+    });
+  }
+
+  return merged;
+}
+
+function parseParentNames(
+  value: unknown,
+  presetName: string,
+  presets: UnknownRecord,
+): string[] {
+  let parentNames: string[];
+  if (typeof value === "string") {
+    parentNames = value && value in presets
+      ? [value]
+      : value.split(",").map(name => name.trim());
+  } else if (Array.isArray(value)) {
+    if (value.some(name => typeof name !== "string")) {
+      throw new Error(
+        `Preset '${presetName}'.extends must be a preset name or a list of preset names.`,
+      );
+    }
+    parentNames = value.map(name => name.trim());
+  } else {
+    throw new Error(
+      `Preset '${presetName}'.extends must be a preset name or a list of preset names.`,
+    );
+  }
+
+  if (parentNames.length === 0 || parentNames.some(name => !name)) {
+    throw new Error(`Preset '${presetName}'.extends must name one or more presets.`);
+  }
+  return parentNames;
 }
 
 /** Parse the legacy tagged `.env.quick` format. */
@@ -172,18 +222,15 @@ function parseEnvQuickYamlRoot(raw: UnknownRecord): QuickEnvSection[] {
 
     resolving.push(presetName);
     try {
-      let preset: PresetDefinition;
-      const parentName = rawPreset.extends;
-      if (parentName === undefined) {
-        preset = clonePreset();
-      } else {
-        if (typeof parentName !== "string" || !parentName) {
-          throw new Error(`Preset '${presetName}'.extends must name one preset.`);
+      let preset = clonePreset();
+      const rawParents = rawPreset.extends;
+      if (rawParents !== undefined) {
+        for (const parentName of parseParentNames(rawParents, presetName, raw)) {
+          if (!(parentName in raw)) {
+            throw new Error(`Preset '${presetName}' extends unknown preset '${parentName}'.`);
+          }
+          preset = mergePreset(preset, resolvePreset(parentName));
         }
-        if (!(parentName in raw)) {
-          throw new Error(`Preset '${presetName}' extends unknown preset '${parentName}'.`);
-        }
-        preset = clonePreset(resolvePreset(parentName));
       }
 
       for (const [key, value] of Object.entries(rawPreset)) {
@@ -206,6 +253,7 @@ function parseEnvQuickYamlRoot(raw: UnknownRecord): QuickEnvSection[] {
         const inherited = preset.projects.get(key);
         const project: ProjectDefinition = {
           sharedKeys: [...(inherited?.sharedKeys ?? [])],
+          sharedKeysDefined: inherited?.sharedKeysDefined ?? false,
           variables: { ...inherited?.variables },
         };
 
@@ -215,6 +263,7 @@ function parseEnvQuickYamlRoot(raw: UnknownRecord): QuickEnvSection[] {
             throw new Error(`${presetName}.${key}.$shared must be a list of shared variable names.`);
           }
           project.sharedKeys = [...imports] as string[];
+          project.sharedKeysDefined = true;
         }
 
         for (const [variableName, rawValue] of Object.entries(value)) {

@@ -78,8 +78,16 @@ local:
   shared:
     DATABASE_URL: "postgres://localhost:5432/app_local"
 
+privy:
+  "*":
+    PRIVY_APP_ID: your-privy-app-id
+
+production-database:
+  shared:
+    DATABASE_URL: "postgres://production.example.com:5432/app"
+
 production:
-  extends: local
+  extends: base, privy, production-database
   apps/api:
     HOSTNAME: api.example.com
 ```
@@ -90,7 +98,7 @@ The example uses these concepts:
 - `shared` defines reusable values. It does not apply those values to every project by itself.
 - `$shared` under a project lists the shared values that the project pulls in.
 - A project path such as `apps/api` or `packages/logger` contains values for that project. Direct project values can override inherited or shared values, as `HOSTNAME` does in `production`.
-- `extends` inherits another preset before applying the child preset. Here, `local` inherits `base`, and `production` inherits the resulting `local` preset.
+- `extends` inherits one or more presets before applying the child preset. Separate parent names with commas, as in `extends: base, privy, production-database`, or use a YAML list such as `extends: [base, privy]`. Quickenv applies parents from left to right, then applies the child. Later values override earlier values.
 
 All YAML scalar values, including numbers, booleans, and `null`, become environment-variable strings. Empty strings and the exact string `UNSET` remove a variable.
 

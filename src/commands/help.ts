@@ -25,7 +25,7 @@ ${b("Files")}
   ${c(".quickenv/.quickenv.state")}      active preset/envPath state; gitignored
 
 ${b(".env.quick.yaml format")}
-  Top-level keys are selectable presets. Presets can inherit complete presets.
+  Top-level keys are selectable presets. Presets can inherit one or more complete presets.
 
   base:
     "*":
@@ -35,11 +35,15 @@ ${b(".env.quick.yaml format")}
     apps/api:
       $shared: [DATABASE_URL]
       PORT: 3000
+  secrets:
+    "*":
+      PRIVY_APP_ID: your-privy-app-id
   local:
-    extends: base
+    extends: base, secrets
     shared:
       DATABASE_URL: postgres://localhost/app_local
 
+  Parents are applied left to right, then the child. A YAML list also works.
   "all" is an alias for "*". Scalar values become strings.
   Empty strings and UNSET remove a variable.
   The legacy .env.quick tagged format remains supported when YAML is absent.
