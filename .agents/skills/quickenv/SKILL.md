@@ -47,7 +47,7 @@ Omitting the value from `set`, using an empty value, or storing the exact string
 - Never commit `.quickenv/`; it contains secret sources and state.
 - Treat generated `.env` files and command output as sensitive.
 - Define presets in `.quickenv/.env.quick.yaml`. Prefer this YAML source over the legacy `.env.quick` format.
-- In YAML, `"*"` applies common values, `shared` defines reusable values, `$shared` imports them into a project, and `extends` inherits another preset.
+- In YAML, `"*"` applies common values, `shared` defines reusable values, and `$shared` imports them into a project. `extends` inherits one or more presets. Separate parents with commas or use a YAML list; parents apply from left to right before the child.
 - Later source files listed in `.quickenv/.quickenv.state` override earlier files.
 - Mark secrets in `quickenv.yaml` with `variables.<name>.sensitive: true` and optionally configure `revealPattern` and `maskGroups`.
 
