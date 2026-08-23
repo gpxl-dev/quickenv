@@ -13,6 +13,7 @@ import { tmpdir } from "os";
 import {
   addWorktreeSourceToState,
   buildPostWorktreeHookEnv,
+  copyQuickenvConfig,
   createPresetInSource,
   getDefaultWorktreePath,
 } from "./create-worktree";
@@ -22,6 +23,22 @@ describe("create-worktree path", () => {
     expect(
       getDefaultWorktreePath("/tmp/quickenv", "feature/new-command"),
     ).toBe("/tmp/quickenv-feature-new-command");
+  });
+
+  test("copies the default Quickenv config", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "quickenv_config_test_"));
+    const source = join(tempDir, "source");
+    const target = join(tempDir, "target");
+    mkdirSync(join(source, ".quickenv"), { recursive: true });
+    writeFileSync(join(source, ".quickenv/.env.quick.yaml"), "local: {}\n");
+
+    expect(await copyQuickenvConfig(source, target)).toBe(
+      ".quickenv/.env.quick.yaml",
+    );
+    expect(readFileSync(join(target, ".quickenv/.env.quick.yaml"), "utf8")).toBe(
+      "local: {}\n",
+    );
+    rmSync(tempDir, { recursive: true, force: true });
   });
 });
 

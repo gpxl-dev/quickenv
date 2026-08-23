@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Command } from "commander";
 import * as p from "@clack/prompts";
-import { chmod, mkdir, open } from "node:fs/promises";
+import { chmod, copyFile, mkdir, open } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "path";
 import { $ } from "bun";
 import {
@@ -335,6 +335,29 @@ async function copyWorktreeIncludeFiles(
   return copied;
 }
 
+async function getQuickenvConfigPath(worktree: string): Promise<string | undefined> {
+  if (await Bun.file(join(worktree, ".quickenv/.env.quick.yaml")).exists()) {
+    return ".quickenv/.env.quick.yaml";
+  }
+  if (await Bun.file(join(worktree, ".quickenv/.env.quick")).exists()) {
+    return ".quickenv/.env.quick";
+  }
+}
+
+export async function copyQuickenvConfig(
+  sourceWorktree: string,
+  targetWorktree: string,
+): Promise<string | undefined> {
+  const relativePath = await getQuickenvConfigPath(sourceWorktree);
+  if (!relativePath || await Bun.file(join(targetWorktree, relativePath)).exists()) {
+    return undefined;
+  }
+
+  await mkdir(dirname(join(targetWorktree, relativePath)), { recursive: true });
+  await copyFile(join(sourceWorktree, relativePath), join(targetWorktree, relativePath));
+  return relativePath;
+}
+
 export function getDefaultWorktreePath(
   mainWorktree: string,
   branch: string,
@@ -521,6 +544,20 @@ async function createWorktree(branchArg: string | WorktreeOptions, opts?: Worktr
     }
   } else {
     p.log.info("No files to copy from .worktreeinclude");
+  }
+
+  const sourceConfig = await getQuickenvConfigPath(mainWorktree);
+  if (sourceConfig && !(await Bun.file(join(worktreePath, sourceConfig)).exists())) {
+    const shouldCopyConfig = await p.confirm({
+      message: `Copy ${sourceConfig} to the new worktree?`,
+      initialValue: true,
+    });
+    if (p.isCancel(shouldCopyConfig) || !shouldCopyConfig) {
+      p.log.info("Skipped Quickenv config copy");
+    } else {
+      await copyQuickenvConfig(mainWorktree, worktreePath);
+      p.log.success(`Copied ${sourceConfig}`);
+    }
   }
 
   // Initialize quickenv in the new worktree
