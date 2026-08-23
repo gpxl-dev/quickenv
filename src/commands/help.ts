@@ -78,7 +78,8 @@ ${b("Commands")}
   set <key> [value] --persist  update the highest-precedence source file
   edit                         open an environment source in $EDITOR
   reset                        revert generated files from current source/preset
-  worktree [branch]            create a git worktree with quickenv setup
+  worktree [branch] [--no-switch]
+                               create a git worktree and open a shell in it
   man                          print this reference
 
 ${b("Root traversal")}
@@ -92,6 +93,9 @@ ${b("Multiple sources")}
 ${b("Worktrees")}
   quickenv worktree feature/my-branch
   quickenv-worktree feature/my-branch --path ../repo-feature
+
+  After setup, quickenv opens a shell in the new worktree. Exit it to return.
+  Pass --no-switch to create the worktree without opening a shell.
 
   Optional .worktreeinclude entries are copied. Select an existing preset or
   create one in an existing YAML source or a worktree-local source. Optional

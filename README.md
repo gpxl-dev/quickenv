@@ -155,7 +155,7 @@ Target precedence, highest to lowest: `presets.<preset>.target`, `projects[].tar
 | `edit` | Open a source file in `$EDITOR`; prompts when multiple sources exist. |
 | `reset` | Revert generated env files to the current source/active preset. |
 | `man` | Print detailed built-in reference. |
-| `worktree <branch>` | Create a Git worktree with quickenv setup. |
+| `worktree <branch> [--no-switch]` | Create a Git worktree with quickenv setup and open a shell in it. |
 | `--no-traversal` | Require the current directory to contain `quickenv.yaml`. |
 
 For every command except `init`, quickenv searches upward for the nearest `quickenv.yaml` and runs from that root.
@@ -181,6 +181,8 @@ bun run index.ts worktree feature/my-branch
 # or
 bun run scripts/create-worktree.ts feature/my-branch --path ../repo-feature
 ```
+
+After setup, Quickenv opens your shell in the new worktree. Exit that shell to return to the original directory. Pass `--no-switch` to create and configure the worktree without opening a shell.
 
 Optional `.worktreeinclude` files are copied into the new worktree, for example:
 

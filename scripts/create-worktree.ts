@@ -25,6 +25,7 @@ interface WorktreeOptions {
   branch?: string;
   path?: string;
   from?: string;
+  switch?: boolean;
 }
 
 type WorktreeState = {
@@ -616,8 +617,17 @@ async function createWorktree(branchArg: string | WorktreeOptions, opts?: Worktr
 
   // Summary
   p.outro("Worktree created successfully!");
-  console.log("\nNext step:");
-  console.log(`  cd ${relative(process.cwd(), worktreePath)}`);
+
+  if (options.switch !== false) {
+    const shell = process.env.SHELL || "sh";
+    p.log.info(`Opening ${shell} in ${worktreePath}. Exit the shell to return.`);
+    await Bun.spawn([shell], {
+      cwd: resolve(mainWorktree, worktreePath),
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    }).exited;
+  }
 }
 
 export const worktreeCommand = new Command("worktree")
@@ -625,6 +635,7 @@ export const worktreeCommand = new Command("worktree")
   .argument("[branch]", "Branch name to create")
   .option("-p, --path <path>", "Path for the new worktree")
   .option("-f, --from <path>", "Source worktree path (defaults to current)")
+  .option("--no-switch", "Do not open a shell in the new worktree")
   .action(createWorktree);
 
 // Only parse if this file is run directly (not imported)
@@ -636,6 +647,7 @@ if (import.meta.main) {
     .argument("[branch]", "Branch name to create")
     .option("-p, --path <path>", "Path for the new worktree")
     .option("-f, --from <path>", "Source worktree path (defaults to current)")
+    .option("--no-switch", "Do not open a shell in the new worktree")
     .action(createWorktree);
 
   program.parse();
