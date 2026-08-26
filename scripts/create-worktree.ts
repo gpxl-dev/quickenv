@@ -293,6 +293,27 @@ async function worktreeExists(cwd: string, branch: string): Promise<boolean> {
   }
 }
 
+export type WorktreeBranchSource = "local" | "origin" | "new";
+
+export async function resolveWorktreeBranchSource(
+  cwd: string,
+  branch: string,
+): Promise<WorktreeBranchSource> {
+  try {
+    await $`cd ${cwd} && git show-ref --verify --quiet ${`refs/heads/${branch}`}`;
+    return "local";
+  } catch {
+    // The branch may only exist as a remote-tracking branch.
+  }
+
+  try {
+    await $`cd ${cwd} && git show-ref --verify --quiet ${`refs/remotes/origin/${branch}`}`;
+    return "origin";
+  } catch {
+    return "new";
+  }
+}
+
 async function copyWorktreeIncludeFiles(
   mainWorktree: string,
   targetWorktree: string,
@@ -507,20 +528,16 @@ async function createWorktree(branchArg: string | WorktreeOptions, opts?: Worktr
   p.log.step(`Creating worktree for branch '${branch}'...`);
 
   try {
-    // Check if branch exists locally
-    let branchExists = false;
-    try {
-      await $`cd ${mainWorktree} && git rev-parse --verify ${branch}`.quiet();
-      branchExists = true;
-    } catch {
-      branchExists = false;
-    }
+    const branchSource = await resolveWorktreeBranchSource(mainWorktree, branch);
 
-    if (branchExists) {
-      // Branch exists, create worktree from it
+    if (branchSource === "local") {
+      // Branch exists locally, so create the worktree from it.
       await $`cd ${mainWorktree} && git worktree add "${worktreePath}" "${branch}"`;
+    } else if (branchSource === "origin") {
+      // Start from origin's branch and set the new local branch to track it.
+      await $`cd ${mainWorktree} && git worktree add --track -b "${branch}" "${worktreePath}" "origin/${branch}"`;
     } else {
-      // Create new branch and worktree
+      // No local or origin branch exists, so create a new branch from HEAD.
       await $`cd ${mainWorktree} && git worktree add "${worktreePath}" -b "${branch}"`;
     }
   } catch (error) {

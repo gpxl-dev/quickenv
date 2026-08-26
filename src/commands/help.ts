@@ -76,6 +76,7 @@ ${b("Commands")}
   reload                       sync the active preset again
   set <key> [value]            temporary update to generated env files
   set <key> [value] --persist  update the highest-precedence source file
+  delete <key> [--preset ...]  delete a source definition (inheritance may restore it)
   edit                         open an environment source in $EDITOR
   reset                        revert generated files from current source/preset
   worktree [branch] [--no-switch]
@@ -94,8 +95,10 @@ ${b("Worktrees")}
   quickenv worktree feature/my-branch
   quickenv-worktree feature/my-branch --path ../repo-feature
 
-  After setup, quickenv opens a shell in the new worktree. Exit it to return.
-  Pass --no-switch to create the worktree without opening a shell.
+  If the branch is not local but origin/<branch> exists, the local branch tracks it.
+  Otherwise, quickenv creates a new branch from the current commit. After setup,
+  quickenv opens a shell in the new worktree. Exit it to return. Pass --no-switch
+  to create the worktree without opening a shell.
 
   Optional .worktreeinclude entries are copied. Select an existing preset or
   create one in an existing YAML source or a worktree-local source. Optional

@@ -34,12 +34,13 @@ quickenv reload                       # Regenerate files from the active preset
 quickenv set <key> <value>            # Temporarily update generated files
 quickenv set <key> <value> --persist  # Save to the environment source
 quickenv set <key> <value> --persist --preset <preset>
+quickenv delete <key> --preset <preset> # Delete source definition; inheritance may restore a value
 quickenv reset                        # Discard temporary updates and regenerate files
 quickenv edit                         # Open a source file in an editor
 quickenv worktree <branch>            # Create a worktree with quickenv setup
 ```
 
-Omitting the value from `set`, using an empty value, or storing the exact string `UNSET` removes the variable. Confirm the user's intent before removing variables.
+Omitting the value from `set`, using an empty value, or storing the exact string `UNSET` creates an unset tombstone. This suppresses inherited values. Use `delete` to remove the source definition; an inherited value can then become active. Confirm the user's intent before either operation.
 
 ## Configuration rules
 

@@ -478,3 +478,40 @@ export function updateEnvQuickContent(
     ? updateYamlContent(content, updates, onlyIfMissing, options.mergedEffectiveSections)
     : updateLegacyContent(content, updates, onlyIfMissing);
 }
+
+/** Delete a variable definition from one preset scope. Inherited values may reappear. */
+export function deleteEnvQuickVariable(
+  content: string,
+  path: string,
+  preset: string,
+  key: string,
+  project?: string,
+): string {
+  if (!isEnvQuickYamlPath(path)) {
+    const sections = parseEnvQuick(content);
+    const tag = project ? `${project}:${preset}` : preset;
+    const section = sections.find(candidate =>
+      candidate.tags.length === 1 && candidate.tags[0] === tag
+    );
+    if (!section || !(key in section.variables)) return content;
+    delete section.variables[key];
+    return serializeEnvQuick(sections);
+  }
+
+  const document = YAML.parseDocument(content.trim() ? content : "{}");
+  if (document.errors.length > 0) throw document.errors[0];
+
+  const scopes = project
+    ? [project]
+    : ["*", "all"].filter(scope => document.hasIn([preset, scope]));
+  let changed = false;
+  for (const scope of scopes) {
+    const variablePath = [preset, scope, key];
+    if (document.hasIn(variablePath)) {
+      document.deleteIn(variablePath);
+      changed = true;
+    }
+  }
+
+  return changed ? document.toString() : content;
+}

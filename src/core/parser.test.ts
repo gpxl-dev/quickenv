@@ -6,6 +6,7 @@ import {
   parseEnvQuickYaml,
   parseEnvQuickYamlSources,
   updateEnvQuickContent,
+  deleteEnvQuickVariable,
 } from "./parser";
 
 describe("parseEnvQuick", () => {
@@ -429,5 +430,33 @@ local:
     }]);
 
     expect(parseEnvQuick(result)[0]?.variables).toEqual({ OLD: "value", NEW: "value" });
+  });
+});
+
+describe("deleteEnvQuickVariable", () => {
+  it("deletes a common YAML definition from both supported aliases", () => {
+    const content = `local:\n  "*":\n    KEEP: yes\n    REMOVE: common\n  all:\n    REMOVE: alias\n`;
+    const result = deleteEnvQuickVariable(content, ".env.quick.yaml", "local", "REMOVE");
+
+    expect(parseEnvQuickYaml(result)).toEqual([{
+      tags: ["local"],
+      variables: { KEEP: "yes" },
+    }]);
+    expect(result).not.toContain("REMOVE");
+  });
+
+  it("deletes a legacy definition without changing other presets", () => {
+    const content = "[local]\nREMOVE=value\nKEEP=yes\n\n[prod]\nREMOVE=prod\n";
+    const result = deleteEnvQuickVariable(content, ".env.quick", "local", "REMOVE");
+
+    expect(parseEnvQuick(result)).toEqual([
+      { tags: ["local"], variables: { KEEP: "yes" } },
+      { tags: ["prod"], variables: { REMOVE: "prod" } },
+    ]);
+  });
+
+  it("returns unchanged content when the definition does not exist", () => {
+    const content = "local:\n  '*':\n    KEEP: yes\n";
+    expect(deleteEnvQuickVariable(content, ".env.quick.yaml", "local", "MISSING")).toBe(content);
   });
 });

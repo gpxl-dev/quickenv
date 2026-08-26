@@ -16,6 +16,7 @@ import {
   copyQuickenvConfig,
   createPresetInSource,
   getDefaultWorktreePath,
+  resolveWorktreeBranchSource,
 } from "./create-worktree";
 
 describe("create-worktree path", () => {
@@ -39,6 +40,35 @@ describe("create-worktree path", () => {
       "local: {}\n",
     );
     rmSync(tempDir, { recursive: true, force: true });
+  });
+});
+
+describe("create-worktree branch source", () => {
+  test("uses an origin branch when no local branch exists", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "quickenv_branch_source_test_"));
+    try {
+      await $`git -C ${tempDir} init`.quiet();
+      await $`git -C ${tempDir} config user.email "test@test.com"`.quiet();
+      await $`git -C ${tempDir} config user.name "Test"`.quiet();
+      writeFileSync(join(tempDir, "README.md"), "# Test");
+      await $`git -C ${tempDir} add README.md`.quiet();
+      await $`git -C ${tempDir} commit -m initial`.quiet();
+      await $`git -C ${tempDir} update-ref refs/remotes/origin/feat/remote HEAD`.quiet();
+
+      expect(await resolveWorktreeBranchSource(tempDir, "feat/remote")).toBe(
+        "origin",
+      );
+      expect(await resolveWorktreeBranchSource(tempDir, "feat/new")).toBe(
+        "new",
+      );
+
+      await $`git -C ${tempDir} branch feat/remote`.quiet();
+      expect(await resolveWorktreeBranchSource(tempDir, "feat/remote")).toBe(
+        "local",
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });
 

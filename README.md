@@ -150,8 +150,9 @@ Target precedence, highest to lowest: `presets.<preset>.target`, `projects[].tar
 | `list --no-verbose` | Print simple `KEY=value` output. |
 | `switch [preset]` | Write generated env files and save active preset. Prompts when omitted. |
 | `reload` | Re-run `switch` for the active preset. |
-| `set <key> [value]` | Temporarily update generated files for the active preset. Empty value removes. |
-| `set <key> [value] --persist [--preset <preset>]` | Save the value to the highest-precedence source file. |
+| `set <key> [value]` | Temporarily update generated files for the active preset. Empty value unsets. |
+| `set <key> [value] --persist [--preset <preset>]` | Save the value to the highest-precedence source file. An empty value persists an unset tombstone. |
+| `delete <key> [--preset <preset>]` | Delete a definition from the highest-precedence source. An inherited value may become active. |
 | `edit` | Open a source file in `$EDITOR`; prompts when multiple sources exist. |
 | `reset` | Revert generated env files to the current source/active preset. |
 | `man` | Print detailed built-in reference. |
@@ -181,6 +182,8 @@ bun run index.ts worktree feature/my-branch
 # or
 bun run scripts/create-worktree.ts feature/my-branch --path ../repo-feature
 ```
+
+If the branch is not local but `origin/<branch>` exists, the helper creates the worktree from that remote branch and configures the local branch to track it. Otherwise, it creates a new branch from the current commit.
 
 After setup, Quickenv opens your shell in the new worktree. Exit that shell to return to the original directory. Pass `--no-switch` to create and configure the worktree without opening a shell.
 
