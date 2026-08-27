@@ -1,6 +1,7 @@
 import { z } from "zod";
 import YAML from "yaml";
 import { join, isAbsolute, dirname } from "path";
+import { writePrivateFileAtomic } from "./files";
 import {
   isEnvQuickYamlPath,
   parseEnvQuickSource,
@@ -36,9 +37,9 @@ const StateSchema = z.object({
   activePreset: z.string().optional(),
   envPath: z.union([z.string(), z.array(z.string())]).optional(),
   isProtected: z.boolean().optional()
-});
+}).passthrough();
 
-type State = z.infer<typeof StateSchema>;
+export type State = z.infer<typeof StateSchema>;
 
 const DEFAULT_STATE_PATH = ".quickenv/.quickenv.state";
 
@@ -164,21 +165,21 @@ export async function loadMergedEnvQuick(envResult: EnvPathResult): Promise<stri
   return serializeEnvQuick(await loadEnvQuickSections(envResult));
 }
 
-export async function loadConfig(path = "quickenv.yaml"): Promise<Config | null> {
+export async function readConfig(path = "quickenv.yaml"): Promise<Config | null> {
   const file = Bun.file(path);
-  if (!(await file.exists())) {
-    return null;
-  }
-  const text = await file.text();
+  if (!(await file.exists())) return null;
+  return ConfigSchema.parse(YAML.parse(await file.text()));
+}
+
+export async function loadConfig(path = "quickenv.yaml"): Promise<Config | null> {
   try {
-    const raw = YAML.parse(text);
-    return ConfigSchema.parse(raw);
+    return await readConfig(path);
   } catch (e) {
     if (e instanceof z.ZodError) {
       console.error(`\nInvalid configuration in ${path}:`);
       e.issues.forEach(issue => {
-        const path = issue.path.join(".");
-        console.error(`  - ${path ? path + ": " : ""}${issue.message}`);
+        const issuePath = issue.path.join(".");
+        console.error(`  - ${issuePath ? issuePath + ": " : ""}${issue.message}`);
       });
       process.exit(1);
     }
@@ -186,21 +187,21 @@ export async function loadConfig(path = "quickenv.yaml"): Promise<Config | null>
   }
 }
 
-export async function loadState(path = DEFAULT_STATE_PATH): Promise<State> {
+export async function readState(path = DEFAULT_STATE_PATH): Promise<State> {
   const file = Bun.file(path);
-  if (!(await file.exists())) {
-    return {};
-  }
+  if (!(await file.exists())) return {};
+  return StateSchema.parse(await file.json());
+}
+
+export async function loadState(path = DEFAULT_STATE_PATH): Promise<State> {
   try {
-    const json = await file.json();
-    return StateSchema.parse(json);
-  } catch (e) {
-    // If invalid state, warn and return empty
+    return await readState(path);
+  } catch {
     console.warn(`Warning: Failed to parse ${path}. Using default state.`);
     return {};
   }
 }
 
 export async function saveState(state: State, path = DEFAULT_STATE_PATH): Promise<void> {
-  await Bun.write(path, JSON.stringify(state, null, 2));
+  await writePrivateFileAtomic(path, JSON.stringify(state, null, 2));
 }

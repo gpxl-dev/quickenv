@@ -17,6 +17,7 @@ ${b("Quick start")}
   quickenv switch local  write generated env files
   quickenv status        inspect active preset, sources, projects
   quickenv list          inspect resolved variables
+  quickenv extract       move the active source to shared storage
 
 ${b("Files")}
   ${c("quickenv.yaml")}                  committable project/preset metadata
@@ -79,6 +80,7 @@ ${b("Commands")}
   delete <key> [--preset ...]  delete a source definition (inheritance may restore it)
   edit                         open an environment source in $EDITOR
   reset                        revert generated files from current source/preset
+  extract                      move the active YAML source to shared storage
   worktree [branch] [--no-switch]
                                create a git worktree and open a shell in it
   man                          print this reference
@@ -90,6 +92,19 @@ ${b("Root traversal")}
 ${b("Multiple sources")}
   .quickenv/.quickenv.state may set envPath to one file or an ordered array.
   Later files override earlier files.
+
+${b("Shared source extraction")}
+  quickenv extract
+
+  Choose a shared directory outside the current worktree. Quickenv verifies the
+  copied YAML source, sets mode 0600, and stores its canonical absolute path in
+  .quickenv/.quickenv.state. quickenv.yaml stays tracked and does not move.
+
+  Existing destination files require confirmation. Quickenv restores a replaced
+  file if state setup fails. It can then link selected Git worktrees from the same
+  repository. Quickenv removes identical local copies after linking. A worktree
+  with distinct source data requires its own confirmation, and Quickenv leaves
+  that file in place. Future worktrees inherit the same absolute source path.
 
 ${b("Worktrees")}
   quickenv worktree feature/my-branch

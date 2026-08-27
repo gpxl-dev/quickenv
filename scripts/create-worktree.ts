@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { Command } from "commander";
 import * as p from "@clack/prompts";
-import { chmod, copyFile, mkdir, open } from "node:fs/promises";
+import { copyFile, mkdir } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "path";
 import { $ } from "bun";
 import {
@@ -17,6 +17,7 @@ import {
   isEnvQuickYamlPath,
 } from "../src/core/parser";
 import { performSwitch } from "../src/commands/switch";
+import { writePrivateFileAtomic } from "../src/core/files";
 
 const WORKTREE_PRESET_SOURCE = ".quickenv/.env.worktree.yaml";
 const NO_PARENT_PRESET = "__no_parent_preset__";
@@ -76,30 +77,6 @@ export function addWorktreeSourceToState(
   return { ...state, envPath: configuredPaths };
 }
 
-async function writeSecretFile(path: string, content: string): Promise<void> {
-  let handle;
-  try {
-    handle = await open(path, "wx", 0o600);
-  } catch (error: unknown) {
-    if (
-      typeof error !== "object" ||
-      error === null ||
-      !("code" in error) ||
-      error.code !== "EEXIST"
-    ) {
-      throw error;
-    }
-    await chmod(path, 0o600);
-    handle = await open(path, "w");
-  }
-
-  try {
-    await handle.writeFile(content);
-  } finally {
-    await handle.close();
-  }
-}
-
 export async function createPresetInSource(
   sourcePath: string,
   presetName: string,
@@ -115,11 +92,7 @@ export async function createPresetInSource(
   );
 
   await mkdir(dirname(sourcePath), { recursive: true });
-  if (exists) {
-    await Bun.write(sourcePath, updatedContent);
-  } else {
-    await writeSecretFile(sourcePath, updatedContent);
-  }
+  await writePrivateFileAtomic(sourcePath, updatedContent);
 }
 
 async function configureWorktreePreset(
@@ -380,6 +353,27 @@ export async function copyQuickenvConfig(
   return relativePath;
 }
 
+export function buildInheritedWorktreeState(
+  mainState: WorktreeState,
+  mainWorktree: string,
+): WorktreeState {
+  if (!mainState.envPath) return {};
+
+  const inheritPath = (path: string): string => {
+    if (isAbsolute(path)) return path;
+    if (path.startsWith("../")) {
+      return join("..", basename(mainWorktree), path);
+    }
+    return path;
+  };
+
+  return {
+    envPath: Array.isArray(mainState.envPath)
+      ? mainState.envPath.map(inheritPath)
+      : inheritPath(mainState.envPath),
+  };
+}
+
 export function getDefaultWorktreePath(
   mainWorktree: string,
   branch: string,
@@ -583,48 +577,19 @@ async function createWorktree(branchArg: string | WorktreeOptions, opts?: Worktr
 
   const statePath = join(worktreePath, ".quickenv/.quickenv.state");
   const mainStatePath = join(mainWorktree, ".quickenv/.quickenv.state");
-  const mainStateFile = Bun.file(mainStatePath);
-
-  // Build the state for the new worktree - only envPath, no activePreset
-  const newState: Record<string, unknown> = {};
-
-  // Check if main worktree has envPath in its state
-  if (await mainStateFile.exists()) {
-    try {
-      const mainState = await mainStateFile.json();
-      if (mainState.envPath) {
-        // Calculate relative path from new worktree to main's envPath
-        // envPath can be a string or array of strings
-        const calculateRelativePath = (path: string): string => {
-          if (path.startsWith("/")) {
-            return path;
-          }
-          if (path.startsWith("../")) {
-            return join("..", basename(mainWorktree), path);
-          }
-          return path;
-        };
-
-        if (Array.isArray(mainState.envPath)) {
-          // Handle array of paths
-          const envPaths = mainState.envPath.map(calculateRelativePath);
-          newState.envPath = envPaths;
-          p.log.success(`Linked to shared env files: ${envPaths.join(", ")}`);
-        } else {
-          // Handle single string path
-          const envPath = calculateRelativePath(mainState.envPath);
-          newState.envPath = envPath;
-          p.log.success(`Linked to shared env file: ${envPath}`);
-        }
-      }
-    } catch {
-      // Ignore parse errors
-    }
+  const mainState = await loadState(mainStatePath);
+  const newState = buildInheritedWorktreeState(mainState, mainWorktree);
+  if (newState.envPath) {
+    const envPaths = Array.isArray(newState.envPath)
+      ? newState.envPath
+      : [newState.envPath];
+    p.log.success(
+      `${envPaths.length === 1 ? "Linked to shared env file" : "Linked to shared env files"}: ${envPaths.join(", ")}`,
+    );
   }
 
-  // Create the state file (may be empty if no envPath found)
-  await mkdir(dirname(statePath), { recursive: true });
-  await Bun.write(statePath, JSON.stringify(newState, null, 2));
+  // Create the state file (may be empty if no envPath was configured).
+  await saveState(newState, statePath);
   p.log.success("Created .quickenv.state");
 
   const preset = await configureWorktreePreset(worktreePath, branch);

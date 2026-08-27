@@ -7,7 +7,7 @@ import {
   saveState,
 } from "./config";
 import { join } from "path";
-import { mkdtemp, writeFile, mkdir, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, mkdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "os";
 
 describe("resolveEnvQuickPath", () => {
@@ -156,6 +156,29 @@ describe("resolveEnvQuickPath", () => {
     // Should only include existing paths
     expect(result.paths).toEqual([sharedPath, localPath]);
     expect(result.path).toBe(localPath);
+  });
+});
+
+describe("saveState", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "quickenv-state-test-"));
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("creates its parent directory and writes private state atomically", async () => {
+    const statePath = join(tmpDir, ".quickenv/.quickenv.state");
+    await saveState({ activePreset: "local", envPath: "/shared/source.yaml" }, statePath);
+
+    expect(await loadState(statePath)).toEqual({
+      activePreset: "local",
+      envPath: "/shared/source.yaml",
+    });
+    expect((await stat(statePath)).mode & 0o777).toBe(0o600);
   });
 });
 

@@ -37,6 +37,7 @@ quickenv set <key> <value> --persist --preset <preset>
 quickenv delete <key> --preset <preset> # Delete source definition; inheritance may restore a value
 quickenv reset                        # Discard temporary updates and regenerate files
 quickenv edit                         # Open a source file in an editor
+quickenv extract                      # Move the active YAML source to shared storage
 quickenv worktree <branch>            # Create a worktree with quickenv setup
 ```
 
@@ -55,3 +56,5 @@ Omitting the value from `set`, using an empty value, or storing the exact string
 ## Safety
 
 `switch`, `reload`, `reset`, and temporary `set` rewrite generated target files. Preview first and do not hand-edit those files. Protected presets require confirmation; do not bypass or automate that confirmation. Use `scan --yes` only when unattended import is explicitly intended.
+
+`extract` moves the active YAML secret source outside the worktree and records an absolute path in ignored state. Review destination collision prompts carefully. Quickenv does not move tracked `quickenv.yaml` metadata.

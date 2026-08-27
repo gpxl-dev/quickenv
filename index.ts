@@ -12,6 +12,7 @@ import { scanCommand } from "./src/commands/scan";
 import { editCommand } from "./src/commands/edit";
 import { helpCommand } from "./src/commands/help";
 import { statusCommand } from "./src/commands/status";
+import { extractCommand } from "./src/commands/extract";
 import { worktreeCommand } from "./scripts/create-worktree";
 import { useNearestQuickenvRoot } from "./src/core/root";
 
@@ -43,6 +44,7 @@ program.addCommand(deleteCommand);
 program.addCommand(editCommand);
 program.addCommand(resetCommand);
 program.addCommand(statusCommand);
+program.addCommand(extractCommand);
 program.addCommand(helpCommand);
 program.addCommand(worktreeCommand);
 

@@ -155,6 +155,7 @@ Target precedence, highest to lowest: `presets.<preset>.target`, `projects[].tar
 | `delete <key> [--preset <preset>]` | Delete a definition from the highest-precedence source. An inherited value may become active. |
 | `edit` | Open a source file in `$EDITOR`; prompts when multiple sources exist. |
 | `reset` | Revert generated env files to the current source/active preset. |
+| `extract` | Move the active YAML secret source to a shared directory and link worktrees. |
 | `man` | Print detailed built-in reference. |
 | `worktree <branch> [--no-switch]` | Create a Git worktree with quickenv setup and open a shell in it. |
 | `--no-traversal` | Require the current directory to contain `quickenv.yaml`. |
@@ -173,6 +174,29 @@ For every command except `init`, quickenv searches upward for the nearest `quick
 ```
 
 Later files override earlier files. Missing custom paths are ignored while any custom path exists. If none exists, quickenv falls back to the default source location, where `.env.quick.yaml` takes precedence over the legacy `.env.quick` file.
+
+## Extract a shared source
+
+Run `quickenv extract` from a Quickenv worktree to move its active YAML source outside the worktree:
+
+```bash
+bun run index.ts extract
+```
+
+Quickenv asks for a shared destination directory. It copies the source without printing its values, verifies the copy, sets mode `0600`, and stores the canonical absolute path in `.quickenv/.quickenv.state`. It then removes the worktree-local source. The tracked `quickenv.yaml` file stays in place.
+
+If the destination already contains `.env.quick.yaml`, Quickenv asks before reusing or replacing it. A rejected prompt leaves the source and state unchanged. If state writing fails, Quickenv restores a replaced destination and keeps the local source. If final cleanup fails after the external source is configured, it keeps the verified copies and reports their paths.
+
+After extraction, Quickenv can list the repository's other Git worktrees and link the ones you select. A selected worktree must be a valid Quickenv root from the same Git repository. Quickenv removes an identical local copy after state is updated. It asks again before changing state when a worktree has distinct source data, and leaves that distinct file in place.
+
+Example state after extraction:
+
+```json
+{
+  "activePreset": "local",
+  "envPath": "/home/me/.config/quickenv/my-project/.env.quick.yaml"
+}
+```
 
 ## Worktrees
 
@@ -194,7 +218,7 @@ Optional `.worktreeinclude` files are copied into the new worktree, for example:
 .env.local
 ```
 
-The helper creates `.quickenv/.quickenv.state` in the new worktree. If the source worktree state has `envPath`, it copies that setting so the new worktree can share the same source files.
+The helper creates `.quickenv/.quickenv.state` in the new worktree. If the source worktree state has `envPath`, it copies that setting so the new worktree can share the same source files. Absolute paths created by `quickenv extract` carry into new worktrees unchanged.
 
 Worktree setup then lets you use an existing preset, create a new preset, or skip preset setup. For a new preset, select an existing YAML source or create `.quickenv/.env.worktree.yaml` for that worktree only, then optionally select a parent preset. Quickenv activates the selected preset before it runs the post-worktree hook.
 

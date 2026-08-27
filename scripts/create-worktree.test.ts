@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "os";
 import {
   addWorktreeSourceToState,
+  buildInheritedWorktreeState,
   buildPostWorktreeHookEnv,
   copyQuickenvConfig,
   createPresetInSource,
@@ -235,6 +236,37 @@ describe("create-worktree preset setup", () => {
     expect(Bun.YAML.parse(content)).toEqual({
       base: {},
       feature: { extends: "base" },
+    });
+  });
+});
+
+describe("create-worktree inherited state", () => {
+  test("keeps an external absolute source path unchanged", () => {
+    expect(
+      buildInheritedWorktreeState(
+        {
+          envPath: "/home/user/.config/quickenv/project/.env.quick.yaml",
+          activePreset: "local",
+          isProtected: true,
+        },
+        "/work/repo",
+      ),
+    ).toEqual({
+      envPath: "/home/user/.config/quickenv/project/.env.quick.yaml",
+    });
+  });
+
+  test("copies only envPath for relative source arrays", () => {
+    expect(
+      buildInheritedWorktreeState(
+        {
+          envPath: ["../shared/.env.quick.yaml", ".quickenv/.env.worktree.yaml"],
+          activePreset: "local",
+        },
+        "/work/repo",
+      ),
+    ).toEqual({
+      envPath: ["../shared/.env.quick.yaml", ".quickenv/.env.worktree.yaml"],
     });
   });
 });
