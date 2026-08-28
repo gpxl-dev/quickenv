@@ -15,6 +15,7 @@ import {
   buildInheritedWorktreeState,
   buildPostWorktreeHookEnv,
   copyQuickenvConfig,
+  copyWorktreeIncludeFiles,
   createPresetInSource,
   getDefaultWorktreePath,
   resolveWorktreeBranchSource,
@@ -41,6 +42,43 @@ describe("create-worktree path", () => {
       "local: {}\n",
     );
     rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  test("copies worktree include matches across nested directories", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "quickenv_include_test_"));
+    const source = join(tempDir, "source");
+    const target = join(tempDir, "target");
+
+    try {
+      mkdirSync(join(source, ".agents/skills/example/references"), {
+        recursive: true,
+      });
+      writeFileSync(
+        join(source, ".worktreeinclude"),
+        "# Agent files\n.agents/skills/example/**\n",
+      );
+      writeFileSync(join(source, ".agents/skills/example/SKILL.md"), "skill\n");
+      writeFileSync(
+        join(source, ".agents/skills/example/references/api.md"),
+        "reference\n",
+      );
+
+      expect(await copyWorktreeIncludeFiles(source, target)).toEqual([
+        ".agents/skills/example/SKILL.md",
+        ".agents/skills/example/references/api.md",
+      ]);
+      expect(
+        readFileSync(join(target, ".agents/skills/example/SKILL.md"), "utf8"),
+      ).toBe("skill\n");
+      expect(
+        readFileSync(
+          join(target, ".agents/skills/example/references/api.md"),
+          "utf8",
+        ),
+      ).toBe("reference\n");
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });
 

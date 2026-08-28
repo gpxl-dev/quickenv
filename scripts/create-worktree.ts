@@ -287,7 +287,7 @@ export async function resolveWorktreeBranchSource(
   }
 }
 
-async function copyWorktreeIncludeFiles(
+export async function copyWorktreeIncludeFiles(
   mainWorktree: string,
   targetWorktree: string,
   includeFile: string = ".worktreeinclude"
@@ -310,21 +310,27 @@ async function copyWorktreeIncludeFiles(
   }
 
   const copied: string[] = [];
+  const copies: Array<{ source: string; target: string }> = [];
+  const targetDirectories = new Set<string>();
 
   for (const pattern of patterns) {
     const glob = new Bun.Glob(pattern);
-    for await (const filePath of glob.scan({ cwd: mainWorktree })) {
-      const fullSourcePath = join(mainWorktree, filePath);
-      const fullTargetPath = join(targetWorktree, filePath);
-      const targetDir = dirname(fullTargetPath);
+    // dot: true so entries under dot-directories (.agents, .quickenv, ...) match.
+    for await (const filePath of glob.scan({ cwd: mainWorktree, dot: true })) {
+      const source = join(mainWorktree, filePath);
+      const target = join(targetWorktree, filePath);
 
-      // Ensure target directory exists
-      await $`mkdir -p ${targetDir}`.quiet();
-
-      // Copy file
-      await $`cp ${fullSourcePath} ${fullTargetPath}`.quiet();
+      copies.push({ source, target });
+      targetDirectories.add(dirname(target));
       copied.push(filePath);
     }
+  }
+
+  for (const targetDirectory of targetDirectories) {
+    await mkdir(targetDirectory, { recursive: true });
+  }
+  for (const { source, target } of copies) {
+    await copyFile(source, target);
   }
 
   return copied;
