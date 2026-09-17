@@ -1,6 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import {
   createYamlPresetContent,
+  formatEnvQuickYaml,
   getPresetNames,
   parseEnvQuick,
   parseEnvQuickYaml,
@@ -8,6 +9,25 @@ import {
   updateEnvQuickContent,
   deleteEnvQuickVariable,
 } from "./parser";
+
+describe("formatEnvQuickYaml", () => {
+  it("converts flow mappings to block style without changing values", () => {
+    const result = formatEnvQuickYaml(
+      '# keep me\nlocal: { "*": { TOKEN: secret, ENABLED: true } }\n',
+    );
+
+    expect(result).toBe(`# keep me
+local:
+  "*":
+    TOKEN: secret
+    ENABLED: true
+`);
+    expect(parseEnvQuickYaml(result)).toEqual([{
+      tags: ["local"],
+      variables: { TOKEN: "secret", ENABLED: "true" },
+    }]);
+  });
+});
 
 describe("parseEnvQuick", () => {
   it("parses global variables", () => {
@@ -349,6 +369,20 @@ describe("preset helpers", () => {
 });
 
 describe("updateEnvQuickContent", () => {
+  it("writes updated YAML mappings in block style", () => {
+    const result = updateEnvQuickContent(
+      'local: { "*": { EXISTING: old } }\n',
+      ".env.quick.yaml",
+      [{ preset: "local", variables: { EXISTING: "new", ADDED: "value" } }],
+    );
+
+    expect(result).toBe(`local:
+  "*":
+    EXISTING: new
+    ADDED: value
+`);
+  });
+
   it("updates YAML structurally and uses an existing all alias", () => {
     const result = updateEnvQuickContent(`# keep me\nlocal:\n  all:\n    EXISTING: old\n`, ".env.quick.yaml", [{
       preset: "local",

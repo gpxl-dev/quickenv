@@ -81,6 +81,7 @@ ${b("Commands")}
   edit                         open an environment source in $EDITOR
   reset                        revert generated files from current source/preset
   extract                      move the active YAML source to shared storage
+  format                       format active YAML sources using block style
   worktree [branch] [--no-switch]
                                create a git worktree and open a shell in it
   man                          print this reference

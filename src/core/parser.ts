@@ -11,6 +11,16 @@ export interface EnvQuickUpdate {
   variables: Record<string, string>;
 }
 
+function stringifyYamlDocument(document: ReturnType<typeof YAML.parseDocument>): string {
+  return document.toString({ collectionStyle: "block" });
+}
+
+export function formatEnvQuickYaml(content: string): string {
+  const document = YAML.parseDocument(content.trim() ? content : "{}");
+  if (document.errors.length > 0) throw document.errors[0];
+  return stringifyYamlDocument(document);
+}
+
 export function getPresetNames(sections: QuickEnvSection[]): string[] {
   const presets = new Set<string>();
   for (const section of sections) {
@@ -350,7 +360,7 @@ export function createYamlPresetContent(
   }
 
   document.set(name, document.createNode(parentPreset ? { extends: parentPreset } : {}));
-  return document.toString();
+  return stringifyYamlDocument(document);
 }
 
 export function parseEnvQuickSource(content: string, path: string): QuickEnvSection[] {
@@ -460,7 +470,7 @@ function updateYamlContent(
     }
   }
 
-  return changed ? document.toString() : content;
+  return changed ? stringifyYamlDocument(document) : content;
 }
 
 /** Structurally update either source format without corrupting YAML files. */
@@ -513,5 +523,5 @@ export function deleteEnvQuickVariable(
     }
   }
 
-  return changed ? document.toString() : content;
+  return changed ? stringifyYamlDocument(document) : content;
 }

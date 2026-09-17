@@ -13,6 +13,7 @@ import { editCommand } from "./src/commands/edit";
 import { helpCommand } from "./src/commands/help";
 import { statusCommand } from "./src/commands/status";
 import { extractCommand } from "./src/commands/extract";
+import { formatCommand } from "./src/commands/format";
 import { worktreeCommand } from "./scripts/create-worktree";
 import { useNearestQuickenvRoot } from "./src/core/root";
 
@@ -45,6 +46,7 @@ program.addCommand(editCommand);
 program.addCommand(resetCommand);
 program.addCommand(statusCommand);
 program.addCommand(extractCommand);
+program.addCommand(formatCommand);
 program.addCommand(helpCommand);
 program.addCommand(worktreeCommand);
 

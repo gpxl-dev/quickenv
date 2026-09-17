@@ -156,6 +156,7 @@ Target precedence, highest to lowest: `presets.<preset>.target`, `projects[].tar
 | `edit` | Open a source file in `$EDITOR`; prompts when multiple sources exist. |
 | `reset` | Revert generated env files to the current source/active preset. |
 | `extract` | Move the active YAML secret source to a shared directory and link worktrees. |
+| `format` | Rewrite active YAML sources using block-style mappings and sequences. |
 | `man` | Print detailed built-in reference. |
 | `worktree <branch> [--no-switch]` | Create a Git worktree with quickenv setup and open a shell in it. |
 | `--no-traversal` | Require the current directory to contain `quickenv.yaml`. |
