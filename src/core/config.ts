@@ -175,6 +175,11 @@ export async function loadConfig(path = "quickenv.yaml"): Promise<Config | null>
   try {
     return await readConfig(path);
   } catch (e) {
+    if (e instanceof YAML.YAMLParseError) {
+      console.error(`\nInvalid configuration in ${path}:`);
+      console.error(e.message);
+      process.exit(1);
+    }
     if (e instanceof z.ZodError) {
       console.error(`\nInvalid configuration in ${path}:`);
       e.issues.forEach(issue => {

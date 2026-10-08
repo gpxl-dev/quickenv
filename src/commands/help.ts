@@ -79,7 +79,7 @@ ${b("Commands")}
   set <key> [value] --persist  update the highest-precedence source file
   delete <key> [--preset ...]  delete a source definition (inheritance may restore it)
   edit                         open an environment source in $EDITOR
-  reset                        revert generated files from current source/preset
+  reset [project]              revert all projects or one path/basename/unique partial match
   extract                      move the active YAML source to shared storage
   format                       format active YAML sources using block style
   worktree [branch] [--no-switch]

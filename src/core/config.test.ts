@@ -10,6 +10,46 @@ import { join } from "path";
 import { mkdtemp, writeFile, mkdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "os";
 
+describe("loadConfig", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "quickenv-config-test-"));
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it.each([
+    ["duplicate keys", "projects: []\nprojects: []\n", "Map keys must be unique at line 2, column 1"],
+    ["invalid syntax", "projects: [\n", "at line 2, column 1"],
+    ["schema errors", "projects: 42\n", "projects: Invalid input"],
+  ])("reports %s with the config path and no stack trace", async (_name, content, message) => {
+    const configPath = join(tmpDir, "custom.yaml");
+    await writeFile(configPath, content);
+    const modulePath = join(import.meta.dir, "config.ts");
+    const child = Bun.spawn([
+      process.execPath,
+      "--eval",
+      `import { loadConfig } from ${JSON.stringify(modulePath)}; await loadConfig(${JSON.stringify(configPath)});`,
+    ], { stdout: "pipe", stderr: "pipe" });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+
+    expect(exitCode).toBe(1);
+    expect(stdout).toBe("");
+    expect(stderr).toContain(`Invalid configuration in ${configPath}:`);
+    expect(stderr).toContain(message);
+    expect(stderr).not.toContain("YAMLParseError");
+    expect(stderr).not.toMatch(/^\s+at /m);
+    expect(stderr).not.toContain("config.ts:");
+  });
+});
+
 describe("resolveEnvQuickPath", () => {
   let tmpDir: string;
 

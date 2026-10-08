@@ -4,14 +4,30 @@ import { loadConfig, loadState, saveState, resolveEnvQuickPath, loadEnvQuickSect
 import { getPresetNames } from "../core/parser";
 import { resolveEnv } from "../core/resolver";
 import { serializeEnvFile } from "../core/envfile";
-import { join } from "path";
+import { basename, join } from "path";
 
-export async function performSwitch(preset: string, rootDir: string = process.cwd()) {
+export async function performSwitch(preset: string, rootDir: string = process.cwd(), projectArg?: string) {
     const configPath = join(rootDir, "quickenv.yaml");
     const config = await loadConfig(configPath);
     if (!config) {
             console.error("quickenv.yaml not found. Run 'quickenv init'.");
             process.exit(1);
+    }
+
+    let projects = config.projects || [];
+    if (projectArg !== undefined) {
+        const projectPaths = projects.map(proj => typeof proj === "string" ? proj : proj.path);
+        const exact = projectPaths.filter(path => path === projectArg);
+        const byBasename = projectPaths.filter(path => basename(path) === projectArg);
+        const matches = exact.length ? exact : byBasename.length ? byBasename
+            : projectPaths.filter(path => projectArg.length > 0 && path.includes(projectArg));
+        if (matches.length !== 1) {
+            console.error(matches.length === 0
+                ? `No project matches '${projectArg}'. Available projects: ${projectPaths.join(", ")}`
+                : `Ambiguous project '${projectArg}'. Use an exact path: ${matches.join(", ")}`);
+            process.exit(1);
+        }
+        projects = projects.filter(proj => (typeof proj === "string" ? proj : proj.path) === matches[0]);
     }
 
     const statePath = join(rootDir, ".quickenv/.quickenv.state");
@@ -52,7 +68,6 @@ export async function performSwitch(preset: string, rootDir: string = process.cw
         }
     }
 
-    const projects = config.projects || [];
     if (projects.length === 0) {
         console.warn("No projects defined in quickenv.yaml.");
     }
@@ -82,6 +97,11 @@ export async function performSwitch(preset: string, rootDir: string = process.cw
         console.log(`Updated ${targetPath}`);
     }
     
+    if (projectArg !== undefined) {
+        console.log(`Reset project '${typeof projects[0] === "string" ? projects[0] : projects[0]!.path}' to preset '${preset}'.`);
+        return;
+    }
+
     await saveState({ 
         ...await loadState(statePath), 
         activePreset: preset,
