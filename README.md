@@ -214,12 +214,24 @@ If the branch is not local but `origin/<branch>` exists, the helper creates the 
 
 After setup, Quickenv opens your shell in the new worktree. Exit that shell to return to the original directory. Pass `--no-switch` to create and configure the worktree without opening a shell.
 
+For unattended setup, select an existing preset explicitly:
+
+```bash
+quickenv worktree provider-release --path ../repo-provider-release --preset local --no-switch
+```
+
+`--preset <name>` skips the preset setup prompts and automatically copies the default secret source if needed. Use `--skip-preset` to leave the worktree without an active preset instead.
+
+Without terminal stdin, Quickenv uses noninteractive mode automatically. Pass `--non-interactive` to require it in a terminal too. This mode requires a branch and either `--preset` or `--skip-preset`, uses the default sibling directory when `--path` is omitted, copies the default source without confirmation, and never opens a shell. Unknown presets and protected presets fail before worktree creation. Protected presets still require interactive confirmation; there is no bypass flag. Post-worktree hooks still run, so hooks used in automation must also avoid prompts.
+
 Optional `.worktreeinclude` files are copied into the new worktree, for example:
 
 ```text
 .quickenv/.env.quick.yaml
 .env.local
 ```
+
+Copy output shows only the file count by default. Pass `--verbose` to print each copied path. All matching files are still copied, including ignored files explicitly matched by `.worktreeinclude`.
 
 The helper creates `.quickenv/.quickenv.state` in the new worktree. If the source worktree state has `envPath`, it copies that setting so the new worktree can share the same source files. Absolute paths created by `quickenv extract` carry into new worktrees unchanged.
 

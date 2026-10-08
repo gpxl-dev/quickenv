@@ -5,6 +5,7 @@ import { copyFile, mkdir } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "path";
 import { $ } from "bun";
 import {
+  loadConfig,
   loadEnvQuickSections,
   loadState,
   resolveEnvQuickPath,
@@ -27,6 +28,10 @@ interface WorktreeOptions {
   path?: string;
   from?: string;
   switch?: boolean;
+  preset?: string;
+  skipPreset?: boolean;
+  nonInteractive?: boolean;
+  verbose?: boolean;
 }
 
 type WorktreeState = {
@@ -95,10 +100,44 @@ export async function createPresetInSource(
   await writePrivateFileAtomic(sourcePath, updatedContent);
 }
 
+async function validateSelectedPreset(
+  rootDir: string,
+  preset: string,
+  nonInteractive: boolean,
+): Promise<void> {
+  const config = await loadConfig(join(rootDir, "quickenv.yaml"));
+  if (!config) throw new Error("quickenv.yaml not found. Run 'quickenv init'.");
+  if (nonInteractive && config.presets[preset]?.protected) {
+    throw new Error(`Preset '${preset}' is protected and requires interactive confirmation.`);
+  }
+  const envResult = await resolveEnvQuickPath(join(rootDir, ".quickenv/.quickenv.state"));
+  if (!(await Bun.file(envResult.path).exists())) {
+    throw new Error(`Environment source not found at ${envResult.path}`);
+  }
+  const names = getPresetNames(await loadEnvQuickSections(envResult));
+  if (!names.includes(preset)) {
+    throw new Error(`Preset '${preset}' not found. Available presets: ${names.join(", ")}`);
+  }
+}
+
 async function configureWorktreePreset(
   worktreePath: string,
   branch: string,
+  options: WorktreeOptions,
 ): Promise<string | undefined> {
+  if (options.skipPreset) {
+    p.log.info("Skipped Quickenv preset setup");
+    return undefined;
+  }
+  if (options.preset) {
+    await validateSelectedPreset(worktreePath, options.preset, !!options.nonInteractive);
+    await performSwitch(options.preset, worktreePath);
+    const state = await loadState(join(worktreePath, ".quickenv/.quickenv.state"));
+    if (state.activePreset !== options.preset) {
+      throw new Error(`Quickenv preset '${options.preset}' was not activated`);
+    }
+    return options.preset;
+  }
   const statePath = join(worktreePath, ".quickenv/.quickenv.state");
   const state = (await loadState(statePath)) as WorktreeState;
   const envResult = await resolveEnvQuickPath(statePath);
@@ -477,7 +516,14 @@ async function runPostWorktreeHook(
 
 async function createWorktree(branchArg: string | WorktreeOptions, opts?: WorktreeOptions) {
   // Handle both standalone CLI (options only) and subcommand (branch, options) signatures
-  const options: WorktreeOptions = opts || (typeof branchArg === 'object' ? branchArg : {});
+  const options: WorktreeOptions = { ...opts || (typeof branchArg === 'object' ? branchArg : {}) };
+  options.nonInteractive = options.nonInteractive || !process.stdin.isTTY;
+  if (options.preset !== undefined && options.skipPreset) {
+    throw new Error("--preset and --skip-preset cannot be used together.");
+  }
+  if (options.nonInteractive && !options.preset && !options.skipPreset) {
+    throw new Error("Noninteractive worktree setup requires --preset <name> or --skip-preset.");
+  }
   const branchFromArg = typeof branchArg === 'string' ? branchArg : undefined;
 
   p.intro("quickenv worktree");
@@ -486,6 +532,9 @@ async function createWorktree(branchArg: string | WorktreeOptions, opts?: Worktr
 
   // Get or prompt for branch name
   let branch = branchFromArg || options.branch;
+  if (!branch && options.nonInteractive) {
+    throw new Error("A branch name is required for noninteractive worktree setup.");
+  }
   if (!branch) {
     const input = await p.text({
       message: "Enter a branch name:",
@@ -501,6 +550,9 @@ async function createWorktree(branchArg: string | WorktreeOptions, opts?: Worktr
 
   // Determine worktree path
   let worktreePath = options.path;
+  if (!worktreePath && options.nonInteractive) {
+    worktreePath = getDefaultWorktreePath(mainWorktree, branch);
+  }
   if (!worktreePath) {
     const defaultPath = getDefaultWorktreePath(mainWorktree, branch);
     const input = await p.text({
@@ -516,6 +568,13 @@ async function createWorktree(branchArg: string | WorktreeOptions, opts?: Worktr
       process.exit(0);
     }
     worktreePath = input.trim();
+  }
+
+  worktreePath = resolve(mainWorktree, worktreePath);
+
+  // Reject invalid or protected unattended selections before creating a worktree.
+  if (options.preset) {
+    await validateSelectedPreset(mainWorktree, options.preset, !!options.nonInteractive);
   }
 
   // Check if worktree already exists
@@ -556,9 +615,11 @@ async function createWorktree(branchArg: string | WorktreeOptions, opts?: Worktr
   );
 
   if (copiedFiles.length > 0) {
-    p.log.success(`Copied ${copiedFiles.length} file(s):`);
-    for (const file of copiedFiles) {
-      console.log(`  • ${file}`);
+    p.log.success(`Copied ${copiedFiles.length} file(s)`);
+    if (options.verbose) {
+      for (const file of copiedFiles) {
+        console.log(`  • ${file}`);
+      }
     }
   } else {
     p.log.info("No files to copy from .worktreeinclude");
@@ -566,7 +627,7 @@ async function createWorktree(branchArg: string | WorktreeOptions, opts?: Worktr
 
   const sourceConfig = await getQuickenvConfigPath(mainWorktree);
   if (sourceConfig && !(await Bun.file(join(worktreePath, sourceConfig)).exists())) {
-    const shouldCopyConfig = await p.confirm({
+    const shouldCopyConfig = options.nonInteractive || options.preset !== undefined || await p.confirm({
       message: `Copy ${sourceConfig} to the new worktree?`,
       initialValue: true,
     });
@@ -598,7 +659,7 @@ async function createWorktree(branchArg: string | WorktreeOptions, opts?: Worktr
   await saveState(newState, statePath);
   p.log.success("Created .quickenv.state");
 
-  const preset = await configureWorktreePreset(worktreePath, branch);
+  const preset = await configureWorktreePreset(worktreePath, branch, options);
 
   // Run post-worktree hook if it exists
   await runPostWorktreeHook(mainWorktree, worktreePath, branch, preset);
@@ -606,7 +667,7 @@ async function createWorktree(branchArg: string | WorktreeOptions, opts?: Worktr
   // Summary
   p.outro("Worktree created successfully!");
 
-  if (options.switch !== false) {
+  if (options.switch !== false && !options.nonInteractive) {
     const shell = process.env.SHELL || "sh";
     p.log.info(`Opening ${shell} in ${worktreePath}. Exit the shell to return.`);
     await Bun.spawn([shell], {
@@ -618,25 +679,30 @@ async function createWorktree(branchArg: string | WorktreeOptions, opts?: Worktr
   }
 }
 
-export const worktreeCommand = new Command("worktree")
-  .description("Create a new git worktree with quickenv support")
-  .argument("[branch]", "Branch name to create")
-  .option("-p, --path <path>", "Path for the new worktree")
-  .option("-f, --from <path>", "Source worktree path (defaults to current)")
-  .option("--no-switch", "Do not open a shell in the new worktree")
-  .action(createWorktree);
-
-// Only parse if this file is run directly (not imported)
-if (import.meta.main) {
-  const program = new Command();
-  program
-    .name("create-worktree")
+function buildWorktreeCommand(name: string): Command {
+  return new Command(name)
     .description("Create a new git worktree with quickenv support")
     .argument("[branch]", "Branch name to create")
     .option("-p, --path <path>", "Path for the new worktree")
     .option("-f, --from <path>", "Source worktree path (defaults to current)")
+    .option("--preset <name>", "Activate an existing preset without the setup prompts")
+    .option("--skip-preset", "Skip preset setup")
+    .option("--non-interactive", "Never prompt or open a shell (automatic without a terminal)")
+    .option("--verbose", "Print each copied file path")
     .option("--no-switch", "Do not open a shell in the new worktree")
-    .action(createWorktree);
+    .action(async (branch, options) => {
+      try {
+        await createWorktree(branch, options);
+      } catch (error) {
+        p.log.error(error instanceof Error ? error.message : String(error));
+        process.exitCode = 1;
+      }
+    });
+}
 
-  program.parse();
+export const worktreeCommand = buildWorktreeCommand("worktree");
+
+// Only parse if this file is run directly (not imported)
+if (import.meta.main) {
+  await buildWorktreeCommand("create-worktree").parseAsync();
 }
