@@ -29,6 +29,8 @@ export function getPresetNames(sections: QuickEnvSection[]): string[] {
       presets.add(separatorIndex === -1 ? tag : tag.slice(separatorIndex + 1));
     }
   }
+  // "*" comes from wildcard tags like `project:*`; it is not a selectable preset.
+  presets.delete("*");
   return [...presets].filter(Boolean).sort((left, right) => left.localeCompare(right));
 }
 

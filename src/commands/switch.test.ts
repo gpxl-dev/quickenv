@@ -246,6 +246,37 @@ local:
         expect(envContent).toContain("PORT=3000");
     });
 
+    it("refuses to switch to an unknown preset and leaves files untouched", async () => {
+        const projectPath = join(tmpDir, "apps/guard-app");
+        await mkdir(projectPath, { recursive: true });
+        await writeFile(join(tmpDir, "quickenv.yaml"), `projects:\n  - apps/guard-app\n`);
+        await mkdir(join(tmpDir, ".quickenv"), { recursive: true });
+        await rm(join(tmpDir, ".quickenv/.quickenv.state"), { force: true });
+        await rm(join(tmpDir, ".quickenv/.env.quick.yaml"), { force: true });
+        await writeFile(join(tmpDir, ".quickenv/.env.quick"), `[dev]\nGUARDED_VAR=value\n`);
+
+        await performSwitch("dev", tmpDir);
+        const envPath = join(projectPath, ".env");
+        const envBefore = await Bun.file(envPath).text();
+        expect(envBefore).toContain("GUARDED_VAR=value");
+
+        const indexPath = join(import.meta.dir, "../../index.ts");
+        const proc = Bun.spawn(["bun", indexPath, "switch", "devv"], {
+            cwd: tmpDir,
+            stdout: "pipe",
+            stderr: "pipe",
+        });
+        expect(await proc.exited).toBe(1);
+        const stderr = await new Response(proc.stderr).text();
+        expect(stderr).toContain("Preset 'devv' not found");
+        expect(stderr).toContain("Available presets: dev");
+
+        // Env files and state must be untouched
+        expect(await Bun.file(envPath).text()).toBe(envBefore);
+        const state = await Bun.file(join(tmpDir, ".quickenv/.quickenv.state")).json();
+        expect(state.activePreset).toBe("dev");
+    });
+
     it("should handle absolute paths in envPath array", async () => {
         const projectPath = join(tmpDir, "apps/abs-app");
         const sharedDir = join(tmpDir, "shared-abs");

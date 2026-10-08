@@ -8,6 +8,7 @@ import {
   parseEnvQuickYamlSources,
 } from "../core/parser";
 import { maskValue } from "../core/masking";
+import { forEachResolvedSection } from "../core/resolver";
 import { basename } from "path";
 
 const FILE_COLORS: Array<(text: string | number) => string> = [
@@ -158,54 +159,10 @@ function resolveEnvWithSources(
     }
   };
 
-  // Layer 1: Global (Untagged)
-  for (const section of sections) {
-    if (section.tags.length === 0) {
-      applyVariables(section.variables, "global");
-    }
-  }
-
-  // Layer 2: Project Specific (Full match only)
-  if (project) {
-    for (const section of sections) {
-      if (section.tags.includes(project)) {
-        applyVariables(section.variables, formatSetBy(section.tags));
-      }
-    }
-  }
-
-  // Layer 3: Preset Specific (All projects)
-  for (const section of sections) {
-    if (section.tags.includes(preset)) {
-      applyVariables(section.variables, formatSetBy(section.tags));
-    }
-  }
-
-  // Layer 4: Wildcard combinations
-  for (const section of sections) {
-    for (const tag of section.tags) {
-      if (project) {
-        if (tag === `*:${preset}` || tag === `${project}:*`) {
-          applyVariables(section.variables, formatSetBy(section.tags));
-        }
-      } else if (tag === `*:${preset}`) {
-        applyVariables(section.variables, formatSetBy(section.tags));
-      }
-    }
-  }
-
-  // Layer 5: Specific combinations
-  for (const section of sections) {
-    for (const tag of section.tags) {
-      if (project) {
-        if (tag === `${project}:${preset}`) {
-          applyVariables(section.variables, formatSetBy(section.tags));
-        }
-      } else if (tag.endsWith(`:${preset}`) && tag !== `*:${preset}`) {
-        applyVariables(section.variables, formatSetBy(section.tags));
-      }
-    }
-  }
+  // Shared traversal with resolveEnv, so list shows exactly what switch writes.
+  forEachResolvedSection(sections, preset, project, (section) => {
+    applyVariables(section.variables, formatSetBy(section.tags));
+  });
 
   return { variables: result, unsets: Array.from(unsetMap.values()) };
 }

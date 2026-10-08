@@ -3,6 +3,7 @@ import * as p from "@clack/prompts";
 import { loadConfig, loadState, saveState, resolveEnvQuickPath, loadEnvQuickSections } from "../core/config";
 import { getPresetNames } from "../core/parser";
 import { resolveEnv } from "../core/resolver";
+import { serializeEnvFile } from "../core/envfile";
 import { join } from "path";
 
 export async function performSwitch(preset: string, rootDir: string = process.cwd()) {
@@ -11,19 +12,6 @@ export async function performSwitch(preset: string, rootDir: string = process.cw
     if (!config) {
             console.error("quickenv.yaml not found. Run 'quickenv init'.");
             process.exit(1);
-    }
-
-    const presetConfig = config.presets[preset];
-    if (presetConfig?.protected) {
-        const confirmed = await p.confirm({
-            message: `⚠️  '${preset}' is a protected preset. Are you sure you want to switch?`,
-            initialValue: false
-        });
-        
-        if (p.isCancel(confirmed) || !confirmed) {
-            console.log("Switch cancelled.");
-            return;
-        }
     }
 
     const statePath = join(rootDir, ".quickenv/.quickenv.state");
@@ -39,8 +27,30 @@ export async function performSwitch(preset: string, rootDir: string = process.cw
         }
         process.exit(1);
     }
-    
+
     const sections = await loadEnvQuickSections(envResult);
+
+    const presetNames = getPresetNames(sections);
+    if (!presetNames.includes(preset)) {
+        console.error(`Preset '${preset}' not found in the environment source. No env files were changed.`);
+        if (presetNames.length > 0) {
+            console.error(`Available presets: ${presetNames.join(", ")}`);
+        }
+        process.exit(1);
+    }
+
+    const presetConfig = config.presets[preset];
+    if (presetConfig?.protected) {
+        const confirmed = await p.confirm({
+            message: `⚠️  '${preset}' is a protected preset. Are you sure you want to switch?`,
+            initialValue: false
+        });
+
+        if (p.isCancel(confirmed) || !confirmed) {
+            console.log("Switch cancelled.");
+            return;
+        }
+    }
 
     const projects = config.projects || [];
     if (projects.length === 0) {
@@ -65,13 +75,10 @@ export async function performSwitch(preset: string, rootDir: string = process.cw
         
         const projectKey = path;
         const vars = resolveEnv(sections, preset, projectKey);
-        
-        const lines = Object.entries(vars).map(([k, v]) => `${k}=${v}`);
-        const fileContent = lines.join("\n") + "\n";
-        
+
         const targetPath = join(rootDir, path, target);
-        
-        await Bun.write(targetPath, fileContent);
+
+        await Bun.write(targetPath, serializeEnvFile(vars));
         console.log(`Updated ${targetPath}`);
     }
     

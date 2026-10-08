@@ -38,27 +38,32 @@ function parseTag(tag: string): { project?: string; preset?: string } {
   };
 }
 
-export function resolveEnv(
-  sections: QuickEnvSection[],
+export interface TaggedSection<TVariables> {
+  tags: string[];
+  variables: TVariables;
+}
+
+/**
+ * Visit sections in precedence order for a preset/project resolution.
+ * Layers, lowest to highest precedence:
+ *   1. untagged (global)
+ *   2. project tags without a preset component (exact or glob)
+ *   3. bare preset tags (all projects)
+ *   4. wildcard combinations (*:preset, project:*, glob:*)
+ *   5. specific combinations (project:preset, glob:preset)
+ * Both resolveEnv and the annotated resolver in `list` share this traversal
+ * so their matching semantics cannot drift apart.
+ */
+export function forEachResolvedSection<TVariables>(
+  sections: TaggedSection<TVariables>[],
   preset: string,
-  project?: string
-): Record<string, string> {
-  const result: Record<string, string> = {};
-
-  const applyVariables = (variables: Record<string, string>) => {
-    for (const [key, value] of Object.entries(variables)) {
-      if (value === "" || value === "UNSET") {
-        delete result[key];
-      } else {
-        result[key] = value;
-      }
-    }
-  };
-
+  project: string | undefined,
+  apply: (section: TaggedSection<TVariables>) => void,
+): void {
   // Layer 1: Global (Untagged)
   for (const section of sections) {
     if (section.tags.length === 0) {
-      applyVariables(section.variables);
+      apply(section);
     }
   }
 
@@ -69,7 +74,7 @@ export function resolveEnv(
         // Skip tags with a colon (those are project:preset combos handled later)
         if (tag.includes(":")) continue;
         if (matchesProject(tag, project)) {
-          applyVariables(section.variables);
+          apply(section);
         }
       }
     }
@@ -78,7 +83,7 @@ export function resolveEnv(
   // Layer 3: Preset Specific (All projects)
   for (const section of sections) {
     if (section.tags.includes(preset)) {
-      applyVariables(section.variables);
+      apply(section);
     }
   }
 
@@ -91,14 +96,14 @@ export function resolveEnv(
       if (project) {
         // *:preset — all projects with this preset
         if (parsed.project === "*" && parsed.preset === preset) {
-          applyVariables(section.variables);
+          apply(section);
         }
         // project:* or glob:* — this project, any preset
         else if (parsed.preset === "*" && matchesProject(parsed.project, project)) {
-          applyVariables(section.variables);
+          apply(section);
         }
       } else if (parsed.project === "*" && parsed.preset === preset) {
-        applyVariables(section.variables);
+        apply(section);
       }
     }
   }
@@ -112,14 +117,32 @@ export function resolveEnv(
 
       if (project) {
         if (parsed.preset === preset && matchesProject(parsed.project, project)) {
-          applyVariables(section.variables);
+          apply(section);
         }
       } else if (parsed.preset === preset) {
         // No project filter — include all project:preset matches
-        applyVariables(section.variables);
+        apply(section);
       }
     }
   }
+}
+
+export function resolveEnv(
+  sections: QuickEnvSection[],
+  preset: string,
+  project?: string
+): Record<string, string> {
+  const result: Record<string, string> = {};
+
+  forEachResolvedSection(sections, preset, project, (section) => {
+    for (const [key, value] of Object.entries(section.variables)) {
+      if (value === "" || value === "UNSET") {
+        delete result[key];
+      } else {
+        result[key] = value;
+      }
+    }
+  });
 
   return result;
 }

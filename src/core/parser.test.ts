@@ -334,6 +334,7 @@ describe("preset helpers", () => {
       getPresetNames([
         { tags: ["base"], variables: {} },
         { tags: ["apps/api:local"], variables: {} },
+        { tags: ["apps/api:*"], variables: {} },
         { tags: ["local"], variables: {} },
       ]),
     ).toEqual(["base", "local"]);

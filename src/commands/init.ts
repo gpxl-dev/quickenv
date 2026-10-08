@@ -23,9 +23,10 @@ export const initCommand = new Command("init")
                      if (Array.isArray(patterns)) {
                         for (const pattern of patterns) {
                             // Pattern might be "apps/*"
-                            // Bun.Glob expects simple patterns usually.
+                            // Workspace patterns match directories, which
+                            // glob.scan() skips unless onlyFiles is disabled.
                             const glob = new Bun.Glob(pattern);
-                            for await (const match of glob.scan()) {
+                            for await (const match of glob.scan({ onlyFiles: false })) {
                                 // Match is relative path like "apps/web"
                                 // Verify it's a dir (has package.json?)
                                 const pkgJson = Bun.file(join(match, "package.json"));

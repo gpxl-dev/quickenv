@@ -3,6 +3,7 @@ import { loadConfig, loadState, resolveEnvQuickPath, loadEnvQuickSections } from
 import { performSwitch } from "./switch";
 import { updateEnvQuickContent, type QuickEnvSection } from "../core/parser";
 import { resolveEnv } from "../core/resolver";
+import { serializeEnvFile } from "../core/envfile";
 import { join } from "path";
 
 export const setCommand = new Command("set")
@@ -59,34 +60,37 @@ export const setCommand = new Command("set")
               sections = await loadEnvQuickSections(envResult);
           }
           
+          const presetConfig = config.presets[activePreset];
           const projects = config.projects || [];
-           for (const proj of projects) {
+          for (const proj of projects) {
             let path: string;
             let target = config.defaultTarget || ".env";
-            
-            if (typeof proj === "string") {
 
+            if (typeof proj === "string") {
                 path = proj;
             } else {
                 path = proj.path;
                 if (proj.target) target = proj.target;
             }
-            
+
+            // Preset target always wins if defined, matching switch behavior.
+            if (presetConfig?.target) {
+                target = presetConfig.target;
+            }
+
             const projectKey = path;
             const vars = resolveEnv(sections, activePreset, projectKey);
-            
+
             // Override
             if (val === "") {
                 delete vars[key];
             } else {
                 vars[key] = val;
             }
-            
-            const lines = Object.entries(vars).map(([k, v]) => `${k}=${v}`);
-            const fileContent = lines.join("\n") + "\n";
+
             const targetPath = join(path, target);
-            
-            await Bun.write(targetPath, fileContent);
+
+            await Bun.write(targetPath, serializeEnvFile(vars));
             console.log(`Updated ${targetPath}`);
           }
       }
