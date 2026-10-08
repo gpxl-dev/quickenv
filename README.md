@@ -50,6 +50,8 @@ quickenv.yaml             # committable metadata
 
 `.quickenv/.quickenv.state` is created later by `switch` or worktree setup.
 
+To discard temporary changes for just one app or package, run `quickenv reset apps/web` or `quickenv reset web`. The project argument matches a configured path, basename, or unique partial path, in that order. Unknown or ambiguous matches fail without changing files. Other projects and the active preset stay unchanged. Omit the argument to reset all projects.
+
 ## Preset source: `.env.quick.yaml`
 
 The preferred source format is `.quickenv/.env.quick.yaml`. Its top-level keys are presets. A preset groups common variables, reusable shared values, and values for specific projects.
@@ -154,7 +156,7 @@ Target precedence, highest to lowest: `presets.<preset>.target`, `projects[].tar
 | `set <key> [value] --persist [--preset <preset>]` | Save the value to the highest-precedence source file. An empty value persists an unset tombstone. |
 | `delete <key> [--preset <preset>]` | Delete a definition from the highest-precedence source. An inherited value may become active. |
 | `edit` | Open a source file in `$EDITOR`; prompts when multiple sources exist. |
-| `reset` | Revert generated env files to the current source/active preset. |
+| `reset [project]` | Revert all generated env files, or just one project, to the current source/active preset. |
 | `extract` | Move the active YAML secret source to a shared directory and link worktrees. |
 | `format` | Rewrite active YAML sources using block-style mappings and sequences. |
 | `man` | Print detailed built-in reference. |
