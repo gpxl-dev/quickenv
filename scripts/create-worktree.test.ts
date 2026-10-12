@@ -22,10 +22,16 @@ import {
 } from "./create-worktree";
 
 describe("create-worktree path", () => {
+  test("uses the branch name without a prefix for the sibling directory", () => {
+    expect(getDefaultWorktreePath("/tmp/quickenv", "my-branch")).toBe(
+      "/tmp/my-branch",
+    );
+  });
+
   test("uses a sibling directory and replaces branch slashes", () => {
     expect(
       getDefaultWorktreePath("/tmp/quickenv", "feature/new-command"),
-    ).toBe("/tmp/quickenv-feature-new-command");
+    ).toBe("/tmp/feature-new-command");
   });
 
   test("copies the default Quickenv config", async () => {

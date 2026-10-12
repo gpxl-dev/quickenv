@@ -425,7 +425,7 @@ export function getDefaultWorktreePath(
 ): string {
   return join(
     dirname(mainWorktree),
-    `${basename(mainWorktree)}-${branch.replace(/\//g, "-")}`,
+    branch.replace(/\//g, "-"),
   );
 }
 

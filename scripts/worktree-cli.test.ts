@@ -60,7 +60,7 @@ test("worktree CLI configures unattended worktrees and rejects unsafe requests",
     const skipped = await run(["skip", "--skip-preset", "--verbose", "--non-interactive"], standalone);
     expect(skipped.code).toBe(0);
     expect(skipped.output).toContain("references/api.md");
-    const skipTarget = join(temp, "repo-skip");
+    const skipTarget = join(temp, "skip");
     expect((await Bun.file(join(skipTarget, ".quickenv/.quickenv.state")).json()).activePreset).toBeUndefined();
     expect(await Bun.file(join(skipTarget, ".env")).exists()).toBe(false);
   } finally {
