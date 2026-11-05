@@ -244,7 +244,13 @@ Optional hooks run after preset setup:
 .quickenv/hooks/post-worktree.sh
 ```
 
-Hook env vars: `WORKTREE_PATH`, `BRANCH_NAME`, and `QUICKENV_PRESET` when preset setup completed. Hook failure warns but does not undo the worktree or preset changes.
+Hook env vars: `WORKTREE_PATH`, `BRANCH_NAME`, and `QUICKENV_PRESET` when preset setup completed. Arguments after `--` are passed to the hook, so automation can answer a hook's own questions:
+
+```bash
+quickenv worktree provider-release --preset local -- --clone-db
+```
+
+Hook failure warns but does not undo the worktree or preset changes.
 
 ## Security
 

@@ -29,7 +29,7 @@ test("worktree CLI configures unattended worktrees and rejects unsafe requests",
     await Bun.write(join(repo, ".worktreeinclude"), "references/**\n");
     await Bun.write(join(repo, ".quickenv/.env.quick.yaml"), 'local:\n  "*":\n    MODE: development\nproduction:\n  "*":\n    MODE: production\n');
     await Bun.write(join(repo, "references/api.md"), "reference content\n");
-    await Bun.write(join(repo, ".quickenv/hooks/post-worktree.sh"), 'printf "%s" "$QUICKENV_PRESET" > "$WORKTREE_PATH/hook-preset.txt"\n');
+    await Bun.write(join(repo, ".quickenv/hooks/post-worktree.sh"), 'printf "%s %s" "$QUICKENV_PRESET" "$*" > "$WORKTREE_PATH/hook-preset.txt"\n');
     await $`git -C ${repo} init`.quiet();
     await $`git -C ${repo} add .`.quiet();
     await $`git -C ${repo} -c user.name=Test -c user.email=test@example.com -c commit.gpgsign=false commit -m initial`.quiet();
@@ -48,14 +48,14 @@ test("worktree CLI configures unattended worktrees and rejects unsafe requests",
     }
 
     const target = join(temp, "nested/feature");
-    const result = await run(["feature", "--path", target, "--preset", "local", "--no-switch"]);
+    const result = await run(["feature", "--path", target, "--preset", "local", "--no-switch", "--", "--hook-flag", "value"]);
     expect(result.code).toBe(0);
     expect(result.output).toContain("Copied 1 file(s)");
     expect(result.output).not.toContain("references/api.md");
     expect(await Bun.file(join(target, "references/api.md")).text()).toBe("reference content\n");
     expect(await Bun.file(join(target, ".env")).text()).toContain("MODE=development");
     expect((await Bun.file(join(target, ".quickenv/.quickenv.state")).json()).activePreset).toBe("local");
-    expect(await Bun.file(join(target, "hook-preset.txt")).text()).toBe("local");
+    expect(await Bun.file(join(target, "hook-preset.txt")).text()).toBe("local --hook-flag value");
 
     const skipped = await run(["skip", "--skip-preset", "--verbose", "--non-interactive"], standalone);
     expect(skipped.code).toBe(0);

@@ -32,6 +32,7 @@ interface WorktreeOptions {
   skipPreset?: boolean;
   nonInteractive?: boolean;
   verbose?: boolean;
+  hookArgs?: string[];
 }
 
 type WorktreeState = {
@@ -448,6 +449,7 @@ async function runPostWorktreeHook(
   worktreePath: string,
   branch: string,
   preset?: string,
+  hookArgs: string[] = [],
 ): Promise<void> {
   const hooksDir = join(mainWorktree, ".quickenv/hooks");
   const tsHook = join(hooksDir, "post-worktree.ts");
@@ -480,7 +482,7 @@ async function runPostWorktreeHook(
 
     if (hookType === "ts") {
       // Run TypeScript hook with bun from the new worktree directory
-      const proc = Bun.spawn(["bun", hookPath], {
+      const proc = Bun.spawn(["bun", hookPath, ...hookArgs], {
         cwd: worktreePath,
         env,
         stdin: "inherit",
@@ -495,7 +497,7 @@ async function runPostWorktreeHook(
       }
     } else {
       // Run shell hook
-      const proc = Bun.spawn(["sh", hookPath], {
+      const proc = Bun.spawn(["sh", hookPath, ...hookArgs], {
         cwd: worktreePath,
         env,
         stdin: "inherit",
@@ -662,7 +664,7 @@ async function createWorktree(branchArg: string | WorktreeOptions, opts?: Worktr
   const preset = await configureWorktreePreset(worktreePath, branch, options);
 
   // Run post-worktree hook if it exists
-  await runPostWorktreeHook(mainWorktree, worktreePath, branch, preset);
+  await runPostWorktreeHook(mainWorktree, worktreePath, branch, preset, options.hookArgs);
 
   // Summary
   p.outro("Worktree created successfully!");
@@ -683,6 +685,7 @@ function buildWorktreeCommand(name: string): Command {
   return new Command(name)
     .description("Create a new git worktree with quickenv support")
     .argument("[branch]", "Branch name to create")
+    .argument("[hookArgs...]", "Arguments after -- passed to the post-worktree hook")
     .option("-p, --path <path>", "Path for the new worktree")
     .option("-f, --from <path>", "Source worktree path (defaults to current)")
     .option("--preset <name>", "Activate an existing preset without the setup prompts")
@@ -690,9 +693,9 @@ function buildWorktreeCommand(name: string): Command {
     .option("--non-interactive", "Never prompt or open a shell (automatic without a terminal)")
     .option("--verbose", "Print each copied file path")
     .option("--no-switch", "Do not open a shell in the new worktree")
-    .action(async (branch, options) => {
+    .action(async (branch, hookArgs, options) => {
       try {
-        await createWorktree(branch, options);
+        await createWorktree(branch, { ...options, hookArgs });
       } catch (error) {
         p.log.error(error instanceof Error ? error.message : String(error));
         process.exitCode = 1;
